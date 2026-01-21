@@ -27,7 +27,7 @@ The system processes crime data, applies spatial clustering algorithms to detect
 * Hotspot detection using clustering algorithms (DBSCAN / KDE)
 * Interactive map-based dashboard
 * Role-based authentication (Admin, Officer, Analyst)
-* Crime reports and data export (CSV / PDF)
+* Crime reports and data export (CSV / PDF).
 
 ---
 
