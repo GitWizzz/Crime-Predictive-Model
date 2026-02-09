@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { findUserByEmail, createUser } from "../models/user.model.js";
+import { findUserByEmail, createUser, findUserById } from "../models/user.model.js";
 import { generateToken } from "../utils/jwt.util.js";
 
 export const signupUser = async ({ name, email, password, role }) => {
@@ -41,4 +41,12 @@ export const loginUser = async ({ email, password }) => {
       role: user.role
     }
   };
+};
+
+export const getUserById = async (id) => {
+  const user = await findUserById(id);
+  if (!user) {
+    throw new Error("User not found");
+  }
+  return user;
 };
