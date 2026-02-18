@@ -3,12 +3,16 @@ import { env } from "../utils/env.js";
 
 const { Pool } = pkg;
 
+const connectionString = process.env.DATABASE_URL;
+
 export const pool = new Pool({
-  host: env.dbHost,
-  port: env.dbPort,
-  user: env.dbUser,
-  password: env.dbPassword,
-  database: env.dbName,
+  connectionString: connectionString || undefined,
+  host: connectionString ? undefined : env.dbHost,
+  port: connectionString ? undefined : env.dbPort,
+  user: connectionString ? undefined : env.dbUser,
+  password: connectionString ? undefined : env.dbPassword,
+  database: connectionString ? undefined : env.dbName,
+  ssl: env.dbSsl === "true" ? { rejectUnauthorized: false } : undefined,
 });
 
 export const connectDB = async () => {

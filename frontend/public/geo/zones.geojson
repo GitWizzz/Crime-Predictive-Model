@@ -1,0 +1,37 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Zone A" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [72.85, 19.05],
+            [72.92, 19.05],
+            [72.92, 19.12],
+            [72.85, 19.12],
+            [72.85, 19.05]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Zone B" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [72.92, 19.12],
+            [73.00, 19.12],
+            [73.00, 19.20],
+            [72.92, 19.20],
+            [72.92, 19.12]
+          ]
+        ]
+      }
+    }
+  ]
+}

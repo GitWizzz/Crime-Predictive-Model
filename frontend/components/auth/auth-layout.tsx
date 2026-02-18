@@ -1,4 +1,4 @@
-// components/auth/auth-layout.tsx
+
 import { ReactNode } from "react";
 
 export function AuthLayout({ children }: { children: ReactNode }) {

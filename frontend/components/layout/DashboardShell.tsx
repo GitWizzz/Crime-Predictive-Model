@@ -3,7 +3,7 @@ import Topbar from './Topbar'
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen">
+    <div className="flex h-[calc(100vh-56px)]">
       <Sidebar />
       <div className="flex flex-col flex-1">
         <Topbar />

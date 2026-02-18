@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate:up": "node-pg-migrate -c pgm.config.cjs up",
+    "migrate:down": "node-pg-migrate -c pgm.config.cjs down",
+    "migrate:create": "node-pg-migrate -c pgm.config.cjs create",
+    "seed:classifications": "node scripts/seed_classifications.js"
   },
   "keywords": [],
   "author": "",
@@ -14,9 +18,14 @@
   "description": "",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.17.2"
+    "pg": "^8.17.2",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "node-pg-migrate": "^8.0.4"
   }
 }

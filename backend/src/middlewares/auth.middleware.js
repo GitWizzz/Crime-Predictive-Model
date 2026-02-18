@@ -8,11 +8,18 @@ export const protect = (req, res, next) => {
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
   ) {
+    token = req.headers.authorization.split(" ")[1];
+  } else if (req.query && req.query.token) {
+    token = req.query.token;
+  } else if (req.headers["x-access-token"]) {
+    token = req.headers["x-access-token"];
+  }
+
+  if (token) {
     try {
-      token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, env.jwtSecret);
       req.user = decoded;
-      next();
+      return next();
     } catch (error) {
       return res.status(401).json({
         success: false,

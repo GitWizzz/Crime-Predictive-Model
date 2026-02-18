@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Patna Station" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [85.05, 25.58],
+            [85.15, 25.58],
+            [85.15, 25.68],
+            [85.05, 25.68],
+            [85.05, 25.58]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Gaya Station" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [84.95, 24.70],
+            [85.05, 24.70],
+            [85.05, 24.80],
+            [84.95, 24.80],
+            [84.95, 24.70]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Bhagalpur Station" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [86.95, 25.20],
+            [87.05, 25.20],
+            [87.05, 25.30],
+            [86.95, 25.30],
+            [86.95, 25.20]
+          ]
+        ]
+      }
+    }
+  ]
+}

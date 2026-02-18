@@ -2,10 +2,10 @@ import { pool } from "../config/db.js";
 
 export const initDB = async () => {
     try {
-        // Enable PostGIS Extension
+        
         await pool.query("CREATE EXTENSION IF NOT EXISTS postgis;");
 
-        // Create Users Table
+        
         await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -17,7 +17,7 @@ export const initDB = async () => {
       );
     `);
 
-        // Create FIRs Table
+        
         await pool.query(`
       CREATE TABLE IF NOT EXISTS firs (
         id SERIAL PRIMARY KEY,

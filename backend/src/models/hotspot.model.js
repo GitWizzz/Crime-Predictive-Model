@@ -1,18 +1,6 @@
 import { pool } from "../config/db.js";
 
-/**
- * Executes Spatial Clustering (DBSCAN) using PostGIS.
- * Returns clustered hotspots with centroids, boundaries, and crime distribution.
- *
- * @param {Object} filters
- * @param {string} filters.crimeType
- * @param {string} filters.startDate
- * @param {string} filters.endDate
- * @param {string} filters.zone
- * @param {number} eps - Distance in meters (default 300)
- * @param {number} minPts - Minimum points to form a cluster (default 4)
- * @returns {Promise<Array>}
- */
+
 export const getHotspots = async ({
     crimeType,
     startDate,
@@ -21,10 +9,10 @@ export const getHotspots = async ({
     eps = 300,
     minPts = 4,
 }) => {
-    // Convert meters to approximate degrees for ST_ClusterDBSCAN (EPSG:4326)
-    // 1 degree lat ~= 111,000 meters at equator.
-    // ST_ClusterDBSCAN in PostGIS < 3.0 only supports geometry (units of the projection).
-    // 4326 uses degrees.
+    
+    
+    
+    
     const epsDegrees = eps / 111000.0;
 
     let query = `
@@ -60,9 +48,9 @@ export const getHotspots = async ({
         values.push(zone);
     }
 
-    // Add ST_ClusterDBSCAN.
-    // We cast location to geometry for the function.
-    // Using epsDegrees.
+    
+    
+    
     query += `
     ),
     clustered_data AS (
@@ -97,10 +85,10 @@ export const getHotspots = async ({
     const result = await pool.query(query, values);
 
     return result.rows.map(row => {
-        // PostGIS json_object_agg might return keys as strings, values as numbers.
-        // ensure centroid and boundary are parsed if they are strings.
-        // pg driver usually parses JSON columns automatically if type is json,
-        // but ST_AsGeoJSON returns text.
+        
+        
+        
+        
         return {
             clusterId: `cluster_${row.cluster_id}`,
             centroid: JSON.parse(row.centroid),

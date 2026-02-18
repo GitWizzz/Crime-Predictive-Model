@@ -1,8 +1,7 @@
 "use client";
 
 import { Shield } from "lucide-react";
-import { AuthPanel } from "@/components/auth/AuthPanel";
-import { ThemeToggle } from "@/components/theme-toggle";
+import Link from "next/link";
 
 export default function LandingPage() {
   return (
@@ -20,9 +19,8 @@ export default function LandingPage() {
 
       <div className="absolute inset-0 bg-white/40 dark:bg-black/80 transition-colors" />
 
-      <ThemeToggle />
-
-      <div className="relative z-10 grid min-h-screen grid-cols-1 lg:grid-cols-2 overflow-visible">
+      <div className="relative z-10 min-h-[calc(100vh-56px)]">
+        <div className="grid min-h-[calc(100vh-56px)] grid-cols-1 lg:grid-cols-2 overflow-visible">
 
         <div className="hidden lg:flex flex-col justify-center px-16">
           <div className="max-w-xl space-y-6">
@@ -52,7 +50,30 @@ export default function LandingPage() {
         </div>
 
         <div className="flex items-center justify-center px-6 overflow-visible">
-          <AuthPanel />
+          <div className="w-full max-w-md rounded-2xl bg-zinc-950 p-8 shadow-2xl">
+            <div className="space-y-2 text-center">
+              <h2 className="text-2xl font-semibold">Access Portal</h2>
+              <p className="text-sm text-zinc-400">
+                Sign in to continue or create a new account.
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <Link
+                href="/login"
+                className="block w-full rounded-md bg-zinc-100 px-4 py-2 text-center font-medium text-zinc-900 hover:bg-zinc-200"
+              >
+                Login
+              </Link>
+              <Link
+                href="/signup"
+                className="block w-full rounded-md border border-zinc-700 px-4 py-2 text-center font-medium text-zinc-100 hover:border-zinc-500"
+              >
+                Sign up
+              </Link>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
     </div>

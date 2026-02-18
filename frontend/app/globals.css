@@ -1,2 +1,31 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "leaflet/dist/leaflet.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html {
+    @apply bg-white text-zinc-900;
+  }
+  html.dark {
+    @apply bg-zinc-950 text-zinc-100;
+  }
+  body {
+    @apply bg-transparent text-inherit;
+  }
+}
+
+.leaflet-tooltip.station-label {
+  background: rgba(255, 255, 255, 0.85);
+  border: 0;
+  box-shadow: none;
+  color: #111827;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 4px;
+}
+
+.leaflet-tooltip.station-label::before {
+  display: none;
+}

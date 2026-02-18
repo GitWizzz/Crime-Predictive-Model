@@ -4,6 +4,10 @@ const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard' },
   { label: 'Hotspots', href: '/dashboard/hotspots' },
   { label: 'FIR Records', href: '/dashboard/firs' },
+  { label: 'Analytics', href: '/dashboard/analytics' },
+  { label: 'Behavioral', href: '/dashboard/behavioral' },
+  { label: 'Patrol Routes', href: '/dashboard/patrols' },
+  { label: 'IRAD Accidents', href: '/dashboard/irad' },
   { label: 'Reports', href: '/dashboard/reports' },
 ]
 

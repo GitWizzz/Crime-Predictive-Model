@@ -28,6 +28,11 @@ The system processes crime data, applies spatial clustering algorithms to detect
 * Interactive map-based dashboard
 * Role-based authentication (Admin, Officer, Analyst)
 * Crime reports and data export (CSV / PDF)
+* Women safety hotspot detection (weighted KDE)
+* IRAD accident hotspot mapping
+* Patrol route optimization + simulation
+* Seasonal trends + forecasting
+* Risk score analytics
 
 ---
 
@@ -36,9 +41,11 @@ The system processes crime data, applies spatial clustering algorithms to detect
 * **Frontend**: Interactive dashboard with maps, charts, and tables
 * **Backend**: REST APIs for data processing, authentication, and analytics
 * **Database**: PostgreSQL with PostGIS for geospatial queries
+* **ML Service**: FastAPI microservice for clustering, KDE, forecasting, and routing
 * **Analytics Layer**: Hotspot detection and aggregation logic
 
 All communication between frontend and backend is handled via **REST APIs**.
+The backend integrates with the ML service via `ML_SERVICE_URL` (default `http://localhost:8001`).
 
 ---
 
@@ -57,6 +64,13 @@ All communication between frontend and backend is handled via **REST APIs**.
 * Express.js
 * JWT-based Authentication
 * Role-Based Access Control (RBAC)
+
+### ML Service
+
+* Python FastAPI
+* scikit-learn, pandas, geopandas, shapely
+* Prophet (time-series forecasting)
+* OR-Tools (route optimization)
 
 ### Database
 
@@ -93,6 +107,45 @@ All communication between frontend and backend is handled via **REST APIs**.
 
 ---
 
+## Environment Variables
+
+Backend (`backend`):
+* `PORT`
+* `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+* `JWT_SECRET`, `JWT_EXPIRES_IN`
+* `ML_SERVICE_URL`
+* `INIT_DB_ON_START` (optional; set to `true` to run legacy init on startup)
+
+Frontend (`frontend`):
+* `NEXT_PUBLIC_API_BASE`
+
+ML Service (`ml-service`):
+* None required by default
+
+---
+
+## Database Migrations
+
+Run migrations in `backend`:
+
+```bash
+npm run migrate:up
+```
+
+Create a new migration:
+
+```bash
+npm run migrate:create -- --name add_new_table
+```
+
+Rollback:
+
+```bash
+npm run migrate:down
+```
+
+---
+
 ## 🔐 Security
 
 * Passwords stored using secure hashing (bcrypt / argon2)
@@ -112,6 +165,110 @@ All communication between frontend and backend is handled via **REST APIs**.
   * Boundary (GeoJSON)
   * Crime count
   * Crime type distribution
+
+---
+
+## ML Microservice
+
+Run the ML service:
+
+```bash
+cd ml-service
+python -m venv .venv
+.venv\\Scripts\\activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8001
+```
+
+ML API endpoints (proxied by backend):
+* `POST /api/ml/cluster` — DBSCAN clustering
+* `POST /api/ml/hotspots/kde` — KDE heatmap generation
+* `POST /api/ml/forecast` — Time-series forecasting
+* `POST /api/ml/routes/optimize` — Patrol route optimization
+* `POST /api/ml/risk-score` — Zone or area risk scoring
+
+---
+
+## Frontend Config (Dev)
+
+Set `NEXT_PUBLIC_API_BASE` to your backend base URL. For authenticated calls in the current UI, store the JWT in `localStorage` under `authToken` after login.
+
+---
+
+## Dummy FIR Dataset Generator
+
+Generate a synthetic FIR dataset for testing (default bbox is Bihar):
+
+```bash
+node backend/scripts/generate_dummy_fir.js --count 500 --out backend/scripts/dummy_firs.json --bbox "24.3,83.2,27.5,88.5"
+```
+
+---
+
+## Zone Boundary Import (PostGIS)
+
+Import Bihar district boundaries into PostGIS:
+
+```bash
+set DATABASE_URL=postgres://postgres:your_password@localhost:5432/crime_db
+node backend/scripts/import_zones_geojson.js --file frontend/public/geo/bihar_districts.geojson --type DISTRICT --nameKey district
+```
+
+Then fetch zones:
+* `GET /api/zones?type=DISTRICT`
+
+---
+
+## Police Station Boundary Import (PostGIS)
+
+Import Bihar police station boundaries into PostGIS:
+
+```bash
+set DATABASE_URL=postgres://postgres:your_password@localhost:5432/crime_db
+node backend/scripts/import_zones_geojson.js --file frontend/public/geo/bihar_police_stations.geojson --type STATION --nameKey name
+```
+
+Then fetch stations:
+* `GET /api/zones?type=STATION`
+
+---
+
+## Classification Seed
+
+```bash
+cd backend
+npm run migrate:up
+npm run seed:classifications
+```
+
+---
+
+## New Analytics APIs
+
+* `GET /api/analytics/zones` — zone totals + dominant crime
+* `GET /api/analytics/seasonal` — monthly / weekday / hourly trends
+* `GET /api/analytics/forecast` — time-series forecast
+* `POST /api/analytics/behavioral` — behavioral clustering + tags
+* `GET /api/analytics/women-safety` — women safety KDE layer
+* `GET /api/analytics/risk` — zone risk scores
+
+## IRAD APIs
+
+* `POST /api/irad/ingest`
+* `GET /api/irad`
+* `GET /api/irad/hotspots`
+
+## Patrol APIs
+
+* `POST /api/patrol/routes` — generate optimized routes
+* `GET /api/patrol/routes`
+* `GET /api/patrol/schedule`
+
+---
+
+## District Totals Export (CSV)
+
+Use the **Export CSV** button on `/dashboard/hotspots` to download district totals.
 
 ---
 

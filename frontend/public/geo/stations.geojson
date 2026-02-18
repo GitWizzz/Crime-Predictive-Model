@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Central Station" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [72.8777, 19.0760]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "East Station" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [72.9350, 19.1650]
+      }
+    }
+  ]
+}
