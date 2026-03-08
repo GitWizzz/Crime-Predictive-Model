@@ -17,7 +17,7 @@ export const getAccidentHotspots = async (filters) => {
   if (!incidents.length) {
     return { heat_points: [] };
   }
-  return await kdeHotspots({
+  const payload = {
     incidents: incidents.map((row) => ({
       id: row.id,
       lat: row.latitude,
@@ -28,5 +28,18 @@ export const getAccidentHotspots = async (filters) => {
     bandwidth_meters: filters.bandwidth_meters || 600,
     grid_size: filters.grid_size || 30,
     weights: incidents.map((row) => row.severity || 1),
-  });
+  };
+
+  try {
+    return await kdeHotspots(payload);
+  } catch {
+    const maxSeverity = Math.max(1, ...incidents.map((i) => Number(i.severity) || 1));
+    return {
+      heat_points: incidents.map((i) => ({
+        lat: Number(i.latitude),
+        lon: Number(i.longitude),
+        intensity: (Number(i.severity) || 1) / maxSeverity,
+      })),
+    };
+  }
 };

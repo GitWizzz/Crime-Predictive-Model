@@ -10,7 +10,10 @@
     "migrate:up": "node-pg-migrate -c pgm.config.cjs up",
     "migrate:down": "node-pg-migrate -c pgm.config.cjs down",
     "migrate:create": "node-pg-migrate -c pgm.config.cjs create",
-    "seed:classifications": "node scripts/seed_classifications.js"
+    "seed:classifications": "node scripts/seed_classifications.js",
+    "seed:demo": "node scripts/seed_demo_data.js",
+    "seed:district-boundaries": "node scripts/update_district_boundaries_from_osm.js",
+    "db:convert-spatial": "node scripts/convert_spatial_to_postgis.js"
   },
   "keywords": [],
   "author": "",

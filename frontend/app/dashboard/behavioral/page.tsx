@@ -31,7 +31,7 @@ export default function BehavioralPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-600">
           <span>Date range:</span>
           <input
@@ -57,21 +57,21 @@ export default function BehavioralPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border bg-white p-4">
+        <div className="dash-card dash-card-hover p-4">
           <p className="text-sm text-zinc-500">Behavioral Clusters</p>
           <p className="text-2xl font-semibold">{clusters.length}</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="dash-card dash-card-hover p-4">
           <p className="text-sm text-zinc-500">Tagged Incidents</p>
           <p className="text-2xl font-semibold">{incidents.length}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <h3 className="text-sm font-semibold text-zinc-700">Incident Pattern Tags</h3>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-3 py-2">Incident ID</th>
                 <th className="px-3 py-2">Crime Type</th>
@@ -81,7 +81,7 @@ export default function BehavioralPage() {
             </thead>
             <tbody>
               {incidents.slice(0, 50).map((incident: any) => (
-                <tr key={incident.id} className="border-b last:border-0">
+                <tr key={incident.id} className="last:border-0">
                   <td className="px-3 py-2">{incident.id}</td>
                   <td className="px-3 py-2">{incident.crime_type}</td>
                   <td className="px-3 py-2">{incident.severity}</td>

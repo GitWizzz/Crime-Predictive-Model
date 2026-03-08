@@ -1,6 +1,95 @@
 import { pool } from "../config/db.js";
+import { getSpatialCapabilities } from "../utils/spatial.util.js";
+
+const isGeometryLike = (value) =>
+  value &&
+  typeof value === "object" &&
+  (value.type === "Polygon" ||
+    value.type === "MultiPolygon" ||
+    value.type === "LineString" ||
+    value.type === "Point");
+
+const toFeature = (zone) => {
+  let geometry = null;
+  const boundary = zone.boundary;
+  if (isGeometryLike(boundary)) {
+    geometry = boundary;
+  } else if (boundary && typeof boundary === "object" && boundary.type === "Feature") {
+    geometry = boundary.geometry || null;
+  }
+
+  return {
+    type: "Feature",
+    geometry,
+    properties: {
+      id: zone.id,
+      name: zone.name,
+      type: zone.type,
+      district_name: zone.district_name ?? null,
+      crime_count: Number(zone.crime_count || 0),
+    },
+  };
+};
 
 export const getZonesWithCounts = async ({ startDate, endDate, type }) => {
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.zoneBoundarySpatial && capabilities.firLocationSpatial;
+
+  if (!usePostgis) {
+    const values = [];
+    let paramIndex = 1;
+    let filter = "";
+    if (type) {
+      filter += ` AND z.type = $${paramIndex++}`;
+      values.push(type);
+    }
+
+    let dateFilter = "";
+    if (startDate) {
+      dateFilter += ` AND f.date_time >= $${paramIndex++}`;
+      values.push(startDate);
+    }
+    if (endDate) {
+      dateFilter += ` AND f.date_time <= $${paramIndex++}`;
+      values.push(endDate);
+    }
+
+    const fallbackQuery = `
+      SELECT
+        z.id,
+        z.name,
+        z.type,
+        z.boundary,
+        CASE WHEN z.type = 'DISTRICT' THEN z.name ELSE NULL END AS district_name,
+        COUNT(f.id)::int AS crime_count
+      FROM zones z
+      LEFT JOIN firs f
+        ON f.zone = z.name
+        ${dateFilter}
+      WHERE 1=1
+        ${filter}
+      GROUP BY z.id, z.name, z.type, z.boundary
+      ORDER BY crime_count DESC;
+    `;
+
+    const result = await pool.query(fallbackQuery, values);
+    const zones = result.rows || [];
+    return {
+      geojson: {
+        type: "FeatureCollection",
+        features: zones.map(toFeature),
+      },
+      totals: zones.map((zone) => ({
+        id: zone.id,
+        name: zone.name,
+        type: zone.type,
+        district_name: zone.district_name ?? null,
+        crime_count: Number(zone.crime_count || 0),
+      })),
+      state_boundary: null,
+    };
+  }
+
   const values = [];
   let paramIndex = 1;
 

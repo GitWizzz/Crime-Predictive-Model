@@ -31,6 +31,8 @@ type FIR = {
   longitude?: number;
 };
 
+type FIRQueryParams = Record<string, string | number>;
+
 export default function FIRsPage() {
   const [filters, setFilters] = useState(initialFilters);
   const [firs, setFirs] = useState<FIR[]>([]);
@@ -72,7 +74,7 @@ export default function FIRsPage() {
     );
   }, [filters, page, limit]);
 
-  const loadFIRs = async (overrideParams) => {
+  const loadFIRs = async (overrideParams?: FIRQueryParams) => {
     if (!token) {
       setError("Missing auth token. Set localStorage key authToken after login.");
       return;
@@ -100,7 +102,9 @@ export default function FIRsPage() {
     }
   }, [token, page, limit]);
 
-  const handleChange = (key) => (event) => {
+  const handleChange =
+    (key: keyof typeof initialFilters) =>
+    (event: React.ChangeEvent<HTMLInputElement>) => {
     setFilters((prev) => ({ ...prev, [key]: event.target.value }));
   };
 
@@ -188,7 +192,7 @@ export default function FIRsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-4 space-y-3">
+      <div className="dash-card dash-card-hover p-4 space-y-3">
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-zinc-700">Add FIR (CCTNS Style)</h3>
           <div className="grid gap-3 md:grid-cols-6">
@@ -349,13 +353,13 @@ export default function FIRsPage() {
         </div>
       )}
 
-      <div className="rounded-lg border bg-white">
+      <div className="dash-card dash-card-hover">
         <div className="border-b px-4 py-2 text-sm text-zinc-500">
           Showing {firs.length} of {total} FIR records
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-4 py-3">FIR No</th>
                 <th className="px-4 py-3">Crime Type</th>
@@ -372,7 +376,7 @@ export default function FIRsPage() {
             </thead>
             <tbody>
               {firs.map((fir) => (
-                <tr key={fir.id} className="border-b last:border-0">
+                <tr key={fir.id} className="last:border-0">
                   <td className="px-4 py-3 font-medium">{fir.fir_no}</td>
                   <td className="px-4 py-3">{fir.crime_type}</td>
                   <td className="px-4 py-3">{fir.act_type || "-"}</td>

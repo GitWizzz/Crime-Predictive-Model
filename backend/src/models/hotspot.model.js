@@ -1,5 +1,5 @@
 import { pool } from "../config/db.js";
-
+import { getSpatialCapabilities } from "../utils/spatial.util.js";
 
 export const getHotspots = async ({
     crimeType,
@@ -20,7 +20,8 @@ export const getHotspots = async ({
         SELECT 
             id, 
             crime_type, 
-            location
+            location,
+            zone
         FROM firs
         WHERE 1=1
   `;
@@ -48,10 +49,11 @@ export const getHotspots = async ({
         values.push(zone);
     }
 
-    
-    
-    
-    query += `
+    const capabilities = await getSpatialCapabilities();
+    const usePostgis = capabilities.firLocationSpatial;
+
+    if (usePostgis) {
+        query += `
     ),
     clustered_data AS (
         SELECT 
@@ -79,8 +81,43 @@ export const getHotspots = async ({
     ) sub
     GROUP BY cid
   `;
+    } else {
+        query += `
+    ),
+    zone_points AS (
+      SELECT
+        COALESCE(zone, 'Unknown') AS cluster_id,
+        COUNT(*)::int AS crime_count,
+        AVG((location->>'longitude')::double precision) AS lon,
+        AVG((location->>'latitude')::double precision) AS lat
+      FROM filtered_data
+      WHERE location IS NOT NULL
+      GROUP BY COALESCE(zone, 'Unknown')
+    ),
+    zone_dist AS (
+      SELECT
+        COALESCE(zone, 'Unknown') AS cluster_id,
+        crime_type,
+        COUNT(*)::int AS cnt
+      FROM filtered_data
+      WHERE location IS NOT NULL
+      GROUP BY COALESCE(zone, 'Unknown'), crime_type
+    )
+    SELECT
+      zone_points.cluster_id,
+      zone_points.crime_count,
+      json_build_object('type','Point','coordinates',json_build_array(zone_points.lon, zone_points.lat))::text AS centroid,
+      NULL::text AS boundary,
+      COALESCE(json_object_agg(zone_dist.crime_type, zone_dist.cnt), '{}'::json) AS crime_distribution
+    FROM zone_points
+    LEFT JOIN zone_dist ON zone_dist.cluster_id = zone_points.cluster_id
+    GROUP BY zone_points.cluster_id, zone_points.crime_count, zone_points.lon, zone_points.lat
+  `;
+    }
 
-    values.push(epsDegrees, minPts);
+    if (usePostgis) {
+        values.push(epsDegrees, minPts);
+    }
 
     const result = await pool.query(query, values);
 
@@ -89,11 +126,15 @@ export const getHotspots = async ({
         
         
         
+        const centroid = typeof row.centroid === "string" ? JSON.parse(row.centroid) : row.centroid;
+        const boundary = row.boundary
+            ? (typeof row.boundary === "string" ? JSON.parse(row.boundary) : row.boundary)
+            : null;
         return {
             clusterId: `cluster_${row.cluster_id}`,
-            centroid: JSON.parse(row.centroid),
+            centroid,
             crimeCount: row.crime_count,
-            boundary: JSON.parse(row.boundary),
+            boundary,
             crimeDistribution: row.crime_distribution
         };
     });

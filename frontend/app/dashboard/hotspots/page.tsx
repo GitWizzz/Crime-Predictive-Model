@@ -1,16 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import HotspotsMap from "@/components/map/HotspotsMap";
+import dynamic from "next/dynamic";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchFIRs, fetchHotspots, fetchKDEHotspots } from "@/services/hotspots";
 import { fetchZones } from "@/services/zones";
 import { fetchZoneAnalytics, fetchWomenSafety } from "@/services/analytics";
 import { fetchIradHotspots } from "@/services/irad";
 
-const MODE_DBSCAN = "dbscan";
-const MODE_KDE = "kde";
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:4000";
+const HotspotsMap = dynamic(() => import("@/components/map/HotspotsMap"), { ssr: false });
+
+const MODE_DBSCAN = "dbscan" as const;
+const MODE_KDE = "kde" as const;
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
 type Hotspot = {
   clusterId: string;
@@ -24,6 +26,14 @@ type HeatPoint = {
   lat: number;
   lon: number;
   intensity: number;
+};
+
+type FIRIncident = {
+  id: number;
+  latitude: number;
+  longitude: number;
+  date_time?: string;
+  crime_type?: string;
 };
 
 type ZoneTotal = {
@@ -123,7 +133,7 @@ const StationChart = ({
 };
 
 export default function HotspotsPage() {
-  const [mode, setMode] = useState(MODE_DBSCAN);
+  const [mode, setMode] = useState<typeof MODE_DBSCAN | typeof MODE_KDE>(MODE_DBSCAN);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [heatPoints, setHeatPoints] = useState<HeatPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -263,7 +273,7 @@ export default function HotspotsPage() {
       return;
     }
 
-    const incidents = firs.map((fir) => ({
+    const incidents = (firs as FIRIncident[]).map((fir) => ({
       id: fir.id,
       lat: fir.latitude,
       lon: fir.longitude,
@@ -374,27 +384,27 @@ export default function HotspotsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <button
-          className={`px-3 py-1 rounded border ${
+          className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
             mode === MODE_DBSCAN
-              ? "bg-zinc-900 text-white"
-              : "bg-white text-zinc-900"
+              ? "bg-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900"
+              : "bg-white text-zinc-900 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
           }`}
           onClick={() => setMode(MODE_DBSCAN)}
         >
           DBSCAN Hotspots
         </button>
         <button
-          className={`px-3 py-1 rounded border ${
+          className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
             mode === MODE_KDE
-              ? "bg-zinc-900 text-white"
-              : "bg-white text-zinc-900"
+              ? "bg-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900"
+              : "bg-white text-zinc-900 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
           }`}
           onClick={() => setMode(MODE_KDE)}
         >
           KDE Heatmap
         </button>
         <button
-          className="px-3 py-1 rounded border bg-white text-zinc-900"
+          className="rounded-lg border bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 transition hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
           onClick={loadData}
           disabled={loading}
         >
@@ -446,7 +456,7 @@ export default function HotspotsPage() {
             className="rounded border px-2 py-1 text-sm"
           />
           <button
-            className="px-2 py-1 rounded border bg-white text-zinc-700"
+            className="rounded-lg border bg-white px-2 py-1 text-sm text-zinc-700 transition hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
             onClick={() => setZoneFilters({ startDate: "", endDate: "" })}
           >
             Clear
@@ -472,7 +482,7 @@ export default function HotspotsPage() {
         showDistrictShading={showDistrictShading}
       />
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <h3 className="text-sm font-semibold text-zinc-700">
           District-wise Crime Chart
         </h3>
@@ -509,7 +519,7 @@ export default function HotspotsPage() {
         />
       </div>
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <h3 className="text-sm font-semibold text-zinc-700">
           Station-wise Crime Chart
         </h3>
@@ -535,13 +545,13 @@ export default function HotspotsPage() {
         />
       </div>
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <h3 className="text-sm font-semibold text-zinc-700">
           Station-wise Crime Totals (by District)
         </h3>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-3 py-2">District</th>
                 <th className="px-3 py-2">Station</th>
@@ -565,7 +575,7 @@ export default function HotspotsPage() {
                 rows.map((row, index) => {
                   const analytic = stationAnalyticsMap.get(row.name) || {};
                   return (
-                    <tr key={`${district}-${row.name}`} className="border-b last:border-0">
+                    <tr key={`${district}-${row.name}`} className="last:border-0">
                       <td className="px-3 py-2">
                         {index === 0 ? district : ""}
                       </td>
@@ -582,7 +592,7 @@ export default function HotspotsPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <h3 className="text-sm font-semibold text-zinc-700">
           District-wise Crime Totals
         </h3>
@@ -611,7 +621,7 @@ export default function HotspotsPage() {
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-3 py-2">District</th>
                 <th className="px-3 py-2">Crimes</th>
@@ -633,7 +643,7 @@ export default function HotspotsPage() {
               {districtTotals.map((row) => {
                 const analytic = districtAnalyticsMap.get(row.name) || {};
                 return (
-                  <tr key={row.name} className="border-b last:border-0">
+                  <tr key={row.name} className="last:border-0">
                     <td className="px-3 py-2">{row.name}</td>
                     <td className="px-3 py-2 font-medium">{row.crime_count}</td>
                     <td className="px-3 py-2">{analytic.dominant_crime_type || "-"}</td>

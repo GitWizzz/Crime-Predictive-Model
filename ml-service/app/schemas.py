@@ -1,96 +1,116 @@
-utf-8frompydanticimportBaseModel,Field
-fromdatetimeimportdatetime
-fromtypingimportList,Optional,Union,Dict
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 
-ID=Union[int,str]
+from pydantic import BaseModel, Field
 
-classPoint(BaseModel):
-    lat:float=Field(...,ge=-90,le=90)
-lon:float=Field(...,ge=-180,le=180)
+ID = Union[int, str]
 
-classIncident(BaseModel):
-    id:ID
-lat:float=Field(...,ge=-90,le=90)
-lon:float=Field(...,ge=-180,le=180)
-occurred_at:Optional[datetime]=None
-crime_type:Optional[str]=None
-severity:Optional[float]=None
 
-classClusterRequest(BaseModel):
-    incidents:List[Incident]
-eps_meters:float=300
-min_samples:int=4
+class Point(BaseModel):
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
 
-classCluster(BaseModel):
-    cluster_id:str
-centroid:Point
-crime_count:int
-member_ids:List[ID]
 
-classClusterResponse(BaseModel):
-    clusters:List[Cluster]
-noise_ids:List[ID]
+class Incident(BaseModel):
+    id: ID
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
+    occurred_at: Optional[datetime] = None
+    crime_type: Optional[str] = None
+    severity: Optional[float] = Field(default=None, ge=0)
 
-classKDERequest(BaseModel):
-    incidents:List[Incident]
-bandwidth_meters:float=500
-grid_size:int=30
-boundary_geojson:Optional[Dict]=None
-weights:Optional[List[float]]=None
 
-classHeatPoint(BaseModel):
-    lat:float
-lon:float
-intensity:float
+class ClusterRequest(BaseModel):
+    incidents: List[Incident]
+    eps_meters: float = Field(default=300, gt=0)
+    min_samples: int = Field(default=4, ge=1)
 
-classKDEResponse(BaseModel):
-    heat_points:List[HeatPoint]
 
-classTimeSeriesPoint(BaseModel):
-    ds:datetime
-y:float
+class Cluster(BaseModel):
+    cluster_id: str
+    centroid: Point
+    crime_count: int
+    member_ids: List[ID]
 
-classForecastRequest(BaseModel):
-    series:List[TimeSeriesPoint]
-periods:int=30
-freq:str="D"
 
-classForecastPoint(BaseModel):
-    ds:datetime
-yhat:float
-yhat_lower:float
-yhat_upper:float
+class ClusterResponse(BaseModel):
+    clusters: List[Cluster]
+    noise_ids: List[ID]
 
-classForecastResponse(BaseModel):
-    points:List[ForecastPoint]
 
-classRouteRequest(BaseModel):
-    depot:Point
-stops:List[Point]
-num_vehicles:int=1
+class KDERequest(BaseModel):
+    incidents: List[Incident]
+    bandwidth_meters: float = Field(default=500, gt=0)
+    grid_size: int = Field(default=30, ge=5, le=200)
+    boundary_geojson: Optional[Dict[str, Any]] = None
+    weights: Optional[List[float]] = None
 
-classRoute(BaseModel):
-    vehicle_id:int
-stop_order:List[int]
-distance_km:float
 
-classRouteResponse(BaseModel):
-    routes:List[Route]
+class HeatPoint(BaseModel):
+    lat: float
+    lon: float
+    intensity: float = Field(..., ge=0, le=1)
 
-classRiskInput(BaseModel):
-    id:ID
-frequency:float
-severity:float
-recency_days:float
-hotspot_density:float
-repeat_rate:float
 
-classRiskScore(BaseModel):
-    id:ID
-score:float
+class KDEResponse(BaseModel):
+    heat_points: List[HeatPoint]
 
-classRiskScoreRequest(BaseModel):
-    items:List[RiskInput]
 
-classRiskScoreResponse(BaseModel):
-    scores:List[RiskScore]
+class TimeSeriesPoint(BaseModel):
+    ds: datetime
+    y: float
+
+
+class ForecastRequest(BaseModel):
+    series: List[TimeSeriesPoint]
+    periods: int = Field(default=30, ge=1, le=365)
+    freq: str = Field(default="D", min_length=1, max_length=8)
+
+
+class ForecastPoint(BaseModel):
+    ds: datetime
+    yhat: float
+    yhat_lower: float
+    yhat_upper: float
+
+
+class ForecastResponse(BaseModel):
+    points: List[ForecastPoint]
+
+
+class RouteRequest(BaseModel):
+    depot: Point
+    stops: List[Point]
+    num_vehicles: int = Field(default=1, ge=1)
+
+
+class Route(BaseModel):
+    vehicle_id: int
+    stop_order: List[int]
+    distance_km: float = Field(..., ge=0)
+
+
+class RouteResponse(BaseModel):
+    routes: List[Route]
+
+
+class RiskInput(BaseModel):
+    id: ID
+    frequency: float = Field(..., ge=0)
+    severity: float = Field(..., ge=0)
+    recency_days: float = Field(..., ge=0)
+    hotspot_density: float = Field(..., ge=0)
+    repeat_rate: float = Field(..., ge=0)
+
+
+class RiskScore(BaseModel):
+    id: ID
+    score: float = Field(..., ge=0, le=100)
+
+
+class RiskScoreRequest(BaseModel):
+    items: List[RiskInput]
+
+
+class RiskScoreResponse(BaseModel):
+    scores: List[RiskScore]

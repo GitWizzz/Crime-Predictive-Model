@@ -3,11 +3,12 @@ import Topbar from './Topbar'
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-[calc(100vh-56px)]">
+    <div className="dashboard-theme relative flex h-[calc(100vh-56px)] overflow-hidden text-zinc-900 dark:text-zinc-100">
+      <div className="dashboard-twinkle pointer-events-none absolute inset-0" />
       <Sidebar />
-      <div className="flex flex-col flex-1">
+      <div className="relative z-10 flex flex-col flex-1">
         <Topbar />
-        <main className="p-4 flex-1">
+        <main className="flex-1 overflow-auto p-5 md:p-6">
           {children}
         </main>
       </div>

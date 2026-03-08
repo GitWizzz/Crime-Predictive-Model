@@ -1,48 +1,60 @@
-utf-8importmath
-fromortools.constraint_solverimportpywrapcp,routing_enums_pb2
-from..schemasimportRouteRequest,RouteResponse,Route
+import math
 
-defhaversine_km(a,b):
-    lat1,lon1=math.radians(a.lat),math.radians(a.lon)
-lat2,lon2=math.radians(b.lat),math.radians(b.lon)
-dlat,dlon=lat2-lat1,lon2-lon1
-h=math.sin(dlat/2)**2+math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
-return2*6371.0088*math.asin(math.sqrt(h))
+from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
-defoptimize_routes(req:RouteRequest)->RouteResponse:
-    locations=[req.depot]+req.stops
-n=len(locations)
+from ..schemas import Route, RouteRequest, RouteResponse
 
-dist=[[haversine_km(locations[i],locations[j])forjinrange(n)]foriinrange(n)]
+EARTH_RADIUS_KM = 6371.0088
 
-manager=pywrapcp.RoutingIndexManager(n,req.num_vehicles,0)
-routing=pywrapcp.RoutingModel(manager)
 
-defdistance_cb(from_index,to_index):
-        returnint(dist[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]*1000)
+def haversine_km(a, b) -> float:
+    lat1, lon1 = math.radians(a.lat), math.radians(a.lon)
+    lat2, lon2 = math.radians(b.lat), math.radians(b.lon)
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(h))
 
-transit_callback_index=routing.RegisterTransitCallback(distance_cb)
-routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
 
-search_params=pywrapcp.DefaultRoutingSearchParameters()
-search_params.first_solution_strategy=routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+def optimize_routes(req: RouteRequest) -> RouteResponse:
+    if not req.stops:
+        return RouteResponse(routes=[])
 
-solution=routing.SolveWithParameters(search_params)
-routes=[]
-ifnotsolution:
-        returnRouteResponse(routes=[])
+    locations = [req.depot] + req.stops
+    n = len(locations)
+    dist = [[haversine_km(locations[i], locations[j]) for j in range(n)] for i in range(n)]
 
-forvehicle_idinrange(req.num_vehicles):
-        index=routing.Start(vehicle_id)
-order=[]
-total_km=0.0
-whilenotrouting.IsEnd(index):
-            node=manager.IndexToNode(index)
-ifnode!=0:
-                order.append(node-1)
-next_index=solution.Value(routing.NextVar(index))
-total_km+=dist[node][manager.IndexToNode(next_index)]
-index=next_index
-routes.append(Route(vehicle_id=vehicle_id,stop_order=order,distance_km=total_km))
+    manager = pywrapcp.RoutingIndexManager(n, req.num_vehicles, 0)
+    routing = pywrapcp.RoutingModel(manager)
 
-returnRouteResponse(routes=routes)
+    def distance_cb(from_index: int, to_index: int) -> int:
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return int(dist[from_node][to_node] * 1000)
+
+    transit_callback_index = routing.RegisterTransitCallback(distance_cb)
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+    search_params = pywrapcp.DefaultRoutingSearchParameters()
+    search_params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+
+    solution = routing.SolveWithParameters(search_params)
+    if not solution:
+        return RouteResponse(routes=[])
+
+    routes = []
+    for vehicle_id in range(req.num_vehicles):
+        index = routing.Start(vehicle_id)
+        order = []
+        total_km = 0.0
+
+        while not routing.IsEnd(index):
+            node = manager.IndexToNode(index)
+            if node != 0:
+                order.append(node - 1)
+            next_index = solution.Value(routing.NextVar(index))
+            total_km += dist[node][manager.IndexToNode(next_index)]
+            index = next_index
+
+        routes.append(Route(vehicle_id=vehicle_id, stop_order=order, distance_km=total_km))
+
+    return RouteResponse(routes=routes)

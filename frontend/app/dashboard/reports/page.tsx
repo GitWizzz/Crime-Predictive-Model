@@ -114,7 +114,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <label className="text-sm text-zinc-500">Forecast days</label>
@@ -139,7 +139,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <div className="text-sm text-zinc-500 mb-3">Prediction Chart</div>
         {chartData.length === 0 ? (
           <div className="text-sm text-zinc-500">No chart data yet.</div>
@@ -175,7 +175,7 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border bg-white">
+        <div className="dash-card dash-card-hover">
           <div className="border-b px-4 py-2 text-sm text-zinc-500">
             Last 14 days (Actual)
           </div>
@@ -195,7 +195,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border bg-white">
+        <div className="dash-card dash-card-hover">
           <div className="border-b px-4 py-2 text-sm text-zinc-500">
             Forecast (Next {periods} days)
           </div>

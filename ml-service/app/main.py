@@ -1,41 +1,68 @@
-utf-8fromfastapiimportFastAPI,HTTPException
-from.schemasimport(
-ClusterRequest,ClusterResponse,
-KDERequest,KDEResponse,
-ForecastRequest,ForecastResponse,
-RouteRequest,RouteResponse,
-RiskScoreRequest,RiskScoreResponse
-)
-from.services.clusteringimportrun_dbscan
-from.services.hotspotsimportrun_kde
-from.services.forecastimportrun_forecast
-from.services.routingimportoptimize_routes
-from.services.riskimportcompute_risk_scores
+from fastapi import FastAPI, HTTPException
 
-app=FastAPI(title="Crime ML Service",version="0.1.0")
+from .schemas import (
+    ClusterRequest,
+    ClusterResponse,
+    ForecastRequest,
+    ForecastResponse,
+    KDERequest,
+    KDEResponse,
+    RiskScoreRequest,
+    RiskScoreResponse,
+    RouteRequest,
+    RouteResponse,
+)
+from .services.clustering import run_dbscan
+from .services.forecast import run_forecast
+from .services.hotspots import run_kde
+from .services.risk import compute_risk_scores
+from .services.routing import optimize_routes
+
+app = FastAPI(title="Crime ML Service", version="0.2.0")
+
 
 @app.get("/health")
-defhealth():
-    return{"status":"ok"}
+def health() -> dict[str, str]:
+    return {"status": "ok"}
 
-@app.post("/cluster",response_model=ClusterResponse)
-defcluster(req:ClusterRequest):
-    returnrun_dbscan(req)
 
-@app.post("/hotspots/kde",response_model=KDEResponse)
-defhotspots(req:KDERequest):
-    returnrun_kde(req)
+@app.post("/cluster", response_model=ClusterResponse)
+def cluster(req: ClusterRequest) -> ClusterResponse:
+    try:
+        return run_dbscan(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-@app.post("/forecast",response_model=ForecastResponse)
-defforecast(req:ForecastRequest):
-    iflen(req.series)<2:
-        raiseHTTPException(status_code=400,detail="Not enough data points")
-returnrun_forecast(req)
 
-@app.post("/routes/optimize",response_model=RouteResponse)
-defroutes(req:RouteRequest):
-    returnoptimize_routes(req)
+@app.post("/hotspots/kde", response_model=KDEResponse)
+def hotspots(req: KDERequest) -> KDEResponse:
+    try:
+        return run_kde(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-@app.post("/risk-score",response_model=RiskScoreResponse)
-defrisk_score(req:RiskScoreRequest):
-    returncompute_risk_scores(req)
+
+@app.post("/forecast", response_model=ForecastResponse)
+def forecast(req: ForecastRequest) -> ForecastResponse:
+    if len(req.series) < 2:
+        raise HTTPException(status_code=400, detail="Not enough data points")
+    try:
+        return run_forecast(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/routes/optimize", response_model=RouteResponse)
+def routes(req: RouteRequest) -> RouteResponse:
+    try:
+        return optimize_routes(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/risk-score", response_model=RiskScoreResponse)
+def risk_score(req: RiskScoreRequest) -> RiskScoreResponse:
+    try:
+        return compute_risk_scores(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

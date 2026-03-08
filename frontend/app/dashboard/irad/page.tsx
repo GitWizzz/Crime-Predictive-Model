@@ -1,9 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import HotspotsMap from "@/components/map/HotspotsMap";
 import { fetchZones } from "@/services/zones";
 import { fetchIradHotspots, fetchIradAccidents, ingestIradAccidents } from "@/services/irad";
+
+const HotspotsMap = dynamic(() => import("@/components/map/HotspotsMap"), { ssr: false });
 
 export default function IradPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export default function IradPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-4 space-y-2">
+      <div className="dash-card dash-card-hover p-4 space-y-2">
         <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-600">
           <span>Date range:</span>
           <input
@@ -101,11 +103,11 @@ export default function IradPage() {
         districts={districtsGeo}
       />
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <h3 className="text-sm font-semibold text-zinc-700">Accident Records</h3>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-3 py-2">Accident ID</th>
                 <th className="px-3 py-2">Date/Time</th>
@@ -115,7 +117,7 @@ export default function IradPage() {
             </thead>
             <tbody>
               {accidents.map((row) => (
-                <tr key={row.id} className="border-b last:border-0">
+                <tr key={row.id} className="last:border-0">
                   <td className="px-3 py-2">{row.accident_id}</td>
                   <td className="px-3 py-2">{new Date(row.date_time).toLocaleString()}</td>
                   <td className="px-3 py-2">{row.severity}</td>

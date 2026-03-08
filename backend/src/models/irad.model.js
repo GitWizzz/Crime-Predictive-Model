@@ -1,7 +1,10 @@
 import { pool } from "../config/db.js";
+import { getSpatialCapabilities } from "../utils/spatial.util.js";
 
 export const insertAccidents = async (items) => {
   if (!items.length) return [];
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.iradLocationSpatial;
 
   const values = [];
   const placeholders = items.map((item, index) => {
@@ -15,8 +18,18 @@ export const insertAccidents = async (items) => {
       item.road_name || null,
       item.district || null
     );
-    return `($${base + 1}, $${base + 2}, $${base + 3}, ST_SetSRID(ST_MakePoint($${base + 5}, $${base + 4}), 4326), $${base + 6}, $${base + 7})`;
+    const locationExpr = usePostgis
+      ? `ST_SetSRID(ST_MakePoint($${base + 5}, $${base + 4}), 4326)`
+      : `jsonb_build_object('type','Point','coordinates',jsonb_build_array($${base + 5},$${base + 4}),'latitude',$${base + 4},'longitude',$${base + 5})`;
+    return `($${base + 1}, $${base + 2}, $${base + 3}, ${locationExpr}, $${base + 6}, $${base + 7})`;
   });
+
+  const lonExpr = usePostgis
+    ? "ST_X(location::geometry)"
+    : "(location->>'longitude')::double precision";
+  const latExpr = usePostgis
+    ? "ST_Y(location::geometry)"
+    : "(location->>'latitude')::double precision";
 
   const query = `
     INSERT INTO irad_accidents (
@@ -25,8 +38,8 @@ export const insertAccidents = async (items) => {
     VALUES ${placeholders.join(", ")}
     ON CONFLICT (accident_id) DO NOTHING
     RETURNING id, accident_id, date_time, severity,
-              ST_X(location::geometry) as longitude,
-              ST_Y(location::geometry) as latitude,
+              ${lonExpr} as longitude,
+              ${latExpr} as latitude,
               road_name, district;
   `;
   const result = await pool.query(query, values);
@@ -34,6 +47,8 @@ export const insertAccidents = async (items) => {
 };
 
 export const listAccidents = async ({ startDate, endDate }) => {
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.iradLocationSpatial;
   const values = [];
   let paramIndex = 1;
   let filter = "";
@@ -47,10 +62,17 @@ export const listAccidents = async ({ startDate, endDate }) => {
     values.push(endDate);
   }
 
+  const lonExpr = usePostgis
+    ? "ST_X(location::geometry)"
+    : "(location->>'longitude')::double precision";
+  const latExpr = usePostgis
+    ? "ST_Y(location::geometry)"
+    : "(location->>'latitude')::double precision";
+
   const query = `
     SELECT id, accident_id, date_time, severity,
-           ST_X(location::geometry) as longitude,
-           ST_Y(location::geometry) as latitude,
+           ${lonExpr} as longitude,
+           ${latExpr} as latitude,
            road_name, district
     FROM irad_accidents
     WHERE 1=1
@@ -63,6 +85,8 @@ export const listAccidents = async ({ startDate, endDate }) => {
 };
 
 export const getAccidentIncidents = async ({ startDate, endDate }) => {
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.iradLocationSpatial;
   const values = [];
   let paramIndex = 1;
   let filter = "";
@@ -76,14 +100,24 @@ export const getAccidentIncidents = async ({ startDate, endDate }) => {
     values.push(endDate);
   }
 
+  const latExpr = usePostgis
+    ? "ST_Y(location::geometry)"
+    : "(location->>'latitude')::double precision";
+  const lonExpr = usePostgis
+    ? "ST_X(location::geometry)"
+    : "(location->>'longitude')::double precision";
+  const locationFilter = usePostgis
+    ? "location IS NOT NULL"
+    : "location IS NOT NULL AND location ? 'latitude' AND location ? 'longitude'";
+
   const query = `
     SELECT id,
-      ST_Y(location::geometry) AS latitude,
-      ST_X(location::geometry) AS longitude,
+      ${latExpr} AS latitude,
+      ${lonExpr} AS longitude,
       date_time,
       severity
     FROM irad_accidents
-    WHERE 1=1
+    WHERE ${locationFilter}
     ${filter};
   `;
   const result = await pool.query(query, values);

@@ -1,6 +1,9 @@
 import { pool } from "../config/db.js";
+import { getSpatialCapabilities } from "../utils/spatial.util.js";
 
 export const getZoneAnalytics = async ({ type = "DISTRICT", startDate, endDate }) => {
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.zoneBoundarySpatial && capabilities.firLocationSpatial;
   const values = [type];
   let paramIndex = 2;
   let dateFilter = "";
@@ -12,6 +15,91 @@ export const getZoneAnalytics = async ({ type = "DISTRICT", startDate, endDate }
   if (endDate) {
     dateFilter += ` AND f.date_time <= $${paramIndex++}`;
     values.push(endDate);
+  }
+
+  if (!usePostgis) {
+    const joinClause =
+      type === "STATION"
+        ? "f.police_station = z.name"
+        : "f.zone = z.name";
+
+    const fallbackQuery = `
+      WITH zone_base AS (
+        SELECT
+          z.id,
+          z.name,
+          z.type,
+          CASE WHEN z.type = 'DISTRICT' THEN z.name ELSE NULL END AS district_name
+        FROM zones z
+        WHERE z.type = $1
+      ),
+      filtered_firs AS (
+        SELECT f.*, COALESCE(f.category, c.category) AS resolved_category
+        FROM firs f
+        LEFT JOIN crime_classifications c
+          ON c.id = f.classification_id
+          OR (c.act_type = f.act_type AND c.section_code = f.section_code)
+        WHERE 1=1
+        ${dateFilter}
+      ),
+      zone_counts AS (
+        SELECT
+          z.id,
+          z.name,
+          z.type,
+          z.district_name,
+          f.crime_type,
+          f.resolved_category as category,
+          COUNT(f.id)::int AS cnt
+        FROM zone_base z
+        LEFT JOIN filtered_firs f
+          ON ${joinClause}
+        GROUP BY z.id, z.name, z.type, z.district_name, f.crime_type, f.resolved_category
+      ),
+      zone_totals AS (
+        SELECT
+          id,
+          name,
+          type,
+          district_name,
+          SUM(cnt)::int AS total,
+          COALESCE(json_object_agg(crime_type, cnt) FILTER (WHERE crime_type IS NOT NULL), '{}'::json) AS crime_breakdown,
+          COALESCE(json_object_agg(category, cnt) FILTER (WHERE category IS NOT NULL), '{}'::json) AS category_breakdown
+        FROM zone_counts
+        GROUP BY id, name, type, district_name
+      ),
+      dominant_crime AS (
+        SELECT DISTINCT ON (id)
+          id,
+          crime_type AS dominant_crime_type,
+          cnt AS dominant_crime_count
+        FROM zone_counts
+        WHERE crime_type IS NOT NULL
+        ORDER BY id, cnt DESC
+      ),
+      dominant_category AS (
+        SELECT DISTINCT ON (id)
+          id,
+          category AS dominant_category,
+          cnt AS dominant_category_count
+        FROM zone_counts
+        WHERE category IS NOT NULL
+        ORDER BY id, cnt DESC
+      )
+      SELECT
+        z.*,
+        dc.dominant_crime_type,
+        dc.dominant_crime_count,
+        dcat.dominant_category,
+        dcat.dominant_category_count
+      FROM zone_totals z
+      LEFT JOIN dominant_crime dc ON dc.id = z.id
+      LEFT JOIN dominant_category dcat ON dcat.id = z.id
+      ORDER BY z.total DESC;
+    `;
+
+    const result = await pool.query(fallbackQuery, values);
+    return result.rows;
   }
 
   const query = `
@@ -178,6 +266,8 @@ export const getTimeSeriesCounts = async ({ interval = "day", startDate, endDate
 };
 
 export const getBehavioralIncidents = async ({ startDate, endDate }) => {
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.firLocationSpatial;
   const values = [];
   let paramIndex = 1;
   let dateFilter = "";
@@ -191,11 +281,21 @@ export const getBehavioralIncidents = async ({ startDate, endDate }) => {
     values.push(endDate);
   }
 
+  const latExpr = usePostgis
+    ? "ST_Y(f.location::geometry)"
+    : "(f.location->>'latitude')::double precision";
+  const lonExpr = usePostgis
+    ? "ST_X(f.location::geometry)"
+    : "(f.location->>'longitude')::double precision";
+  const locationFilter = usePostgis
+    ? "f.location IS NOT NULL"
+    : "f.location IS NOT NULL AND f.location ? 'latitude' AND f.location ? 'longitude'";
+
   const query = `
     SELECT
       f.id,
-      ST_Y(f.location::geometry) AS latitude,
-      ST_X(f.location::geometry) AS longitude,
+      ${latExpr} AS latitude,
+      ${lonExpr} AS longitude,
       f.date_time,
       f.crime_type,
       COALESCE(f.severity, c.severity, 1)::float AS severity
@@ -203,7 +303,7 @@ export const getBehavioralIncidents = async ({ startDate, endDate }) => {
     LEFT JOIN crime_classifications c
       ON c.id = f.classification_id
       OR (c.act_type = f.act_type AND c.section_code = f.section_code)
-    WHERE f.location IS NOT NULL
+    WHERE ${locationFilter}
     ${dateFilter};
   `;
 
@@ -212,6 +312,8 @@ export const getBehavioralIncidents = async ({ startDate, endDate }) => {
 };
 
 export const getWomenSafetyIncidents = async ({ startDate, endDate }) => {
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.firLocationSpatial;
   const values = [];
   let paramIndex = 1;
   let dateFilter = "";
@@ -225,11 +327,21 @@ export const getWomenSafetyIncidents = async ({ startDate, endDate }) => {
     values.push(endDate);
   }
 
+  const latExpr = usePostgis
+    ? "ST_Y(f.location::geometry)"
+    : "(f.location->>'latitude')::double precision";
+  const lonExpr = usePostgis
+    ? "ST_X(f.location::geometry)"
+    : "(f.location->>'longitude')::double precision";
+  const locationFilter = usePostgis
+    ? "f.location IS NOT NULL"
+    : "f.location IS NOT NULL AND f.location ? 'latitude' AND f.location ? 'longitude'";
+
   const query = `
     SELECT
       f.id,
-      ST_Y(f.location::geometry) AS latitude,
-      ST_X(f.location::geometry) AS longitude,
+      ${latExpr} AS latitude,
+      ${lonExpr} AS longitude,
       f.date_time,
       f.crime_type,
       COALESCE(f.severity, c.severity, 1)::float AS severity
@@ -237,7 +349,7 @@ export const getWomenSafetyIncidents = async ({ startDate, endDate }) => {
     LEFT JOIN crime_classifications c
       ON c.id = f.classification_id
       OR (c.act_type = f.act_type AND c.section_code = f.section_code)
-    WHERE f.location IS NOT NULL
+    WHERE ${locationFilter}
       AND (c.is_women_safety = true OR f.category = 'WomenSafety')
     ${dateFilter};
   `;
@@ -247,6 +359,8 @@ export const getWomenSafetyIncidents = async ({ startDate, endDate }) => {
 };
 
 export const getRiskInputs = async ({ startDate, endDate, type = "DISTRICT" }) => {
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.zoneBoundarySpatial && capabilities.firLocationSpatial;
   const values = [type];
   let paramIndex = 2;
   let dateFilter = "";
@@ -258,6 +372,59 @@ export const getRiskInputs = async ({ startDate, endDate, type = "DISTRICT" }) =
   if (endDate) {
     dateFilter += ` AND f.date_time <= $${paramIndex++}`;
     values.push(endDate);
+  }
+
+  if (!usePostgis) {
+    const joinClause =
+      type === "STATION"
+        ? "f.police_station = z.name"
+        : "f.zone = z.name";
+
+    const fallbackQuery = `
+      WITH zone_base AS (
+        SELECT
+          z.id,
+          z.name,
+          z.type
+        FROM zones z
+        WHERE z.type = $1
+      ),
+      filtered_firs AS (
+        SELECT f.*, COALESCE(f.severity, c.severity, 1)::float AS resolved_severity
+        FROM firs f
+        LEFT JOIN crime_classifications c
+          ON c.id = f.classification_id
+          OR (c.act_type = f.act_type AND c.section_code = f.section_code)
+        WHERE 1=1
+        ${dateFilter}
+      ),
+      zone_stats AS (
+        SELECT
+          z.id,
+          z.name,
+          COUNT(f.id)::float AS frequency,
+          AVG(f.resolved_severity)::float AS avg_severity,
+          MAX(f.date_time) AS last_incident,
+          COUNT(DISTINCT f.crime_type)::float AS distinct_crimes,
+          1.0::float AS area_m2
+        FROM zone_base z
+        LEFT JOIN filtered_firs f
+          ON ${joinClause}
+        GROUP BY z.id, z.name
+      )
+      SELECT
+        id,
+        name,
+        frequency,
+        COALESCE(avg_severity, 1) AS avg_severity,
+        COALESCE(DATE_PART('day', NOW() - last_incident), 365)::float AS recency_days,
+        CASE WHEN area_m2 > 0 THEN frequency / area_m2 ELSE 0 END AS density,
+        CASE WHEN distinct_crimes > 0 THEN frequency / distinct_crimes ELSE frequency END AS repeat_rate
+      FROM zone_stats;
+    `;
+
+    const result = await pool.query(fallbackQuery, values);
+    return result.rows;
   }
 
   const query = `

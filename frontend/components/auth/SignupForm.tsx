@@ -18,16 +18,25 @@ import { SocialAuthButtons } from "./SocialAuthButtons";
 import { Divider } from "./Divider";
 import { signup } from "@/services/auth";
 
+type Role = "OFFICER" | "ADMIN" | "ANALYST";
+
 export function SignupForm({ onSwitch }: { onSwitch?: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("OFFICER");
+  const [role, setRole] = useState<Role>("OFFICER");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
+  const handleSwitch = () => {
+    if (onSwitch) {
+      onSwitch();
+      return;
+    }
+    router.push("/login");
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -114,7 +123,7 @@ export function SignupForm({ onSwitch }: { onSwitch?: () => void }) {
 
       <div className="space-y-2">
         <Label>Role*</Label>
-        <Select value={role} onValueChange={setRole}>
+        <Select value={role} onValueChange={(value) => setRole(value as Role)}>
           <SelectTrigger className="bg-zinc-900 border-zinc-800">
             <SelectValue />
           </SelectTrigger>
@@ -165,10 +174,3 @@ export function SignupForm({ onSwitch }: { onSwitch?: () => void }) {
     </form>
   );
 }
-  const handleSwitch = () => {
-    if (onSwitch) {
-      onSwitch();
-      return;
-    }
-    router.push("/login");
-  };

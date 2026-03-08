@@ -48,7 +48,7 @@ export default function PatrolMap({
   const markerPos = positions[idx] || [25.6, 85.2];
 
   return (
-    <div className="h-96 w-full overflow-hidden rounded-lg border">
+    <div className="h-96 w-full overflow-hidden rounded-xl border border-zinc-200/80 shadow-sm dark:border-zinc-800">
       <MapContainer center={markerPos} zoom={8} className="h-full w-full">
         <TileLayer
           attribution="Tiles &copy; Esri"

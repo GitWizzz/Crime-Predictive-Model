@@ -1,17 +1,65 @@
 import { pool } from "../config/db.js";
+import { getSpatialCapabilities } from "../utils/spatial.util.js";
+
+const centroidFromGeometry = (geometry) => {
+  if (!geometry || typeof geometry !== "object") return { lat: null, lon: null };
+
+  if (geometry.type === "Point" && Array.isArray(geometry.coordinates)) {
+    const [lon, lat] = geometry.coordinates;
+    return { lat: Number(lat), lon: Number(lon) };
+  }
+
+  let coords = [];
+  if (geometry.type === "Polygon") {
+    coords = geometry.coordinates?.[0] || [];
+  } else if (geometry.type === "MultiPolygon") {
+    coords = geometry.coordinates?.[0]?.[0] || [];
+  }
+
+  if (!coords.length) return { lat: null, lon: null };
+
+  let sumLat = 0;
+  let sumLon = 0;
+  let count = 0;
+  for (const pair of coords) {
+    if (!Array.isArray(pair) || pair.length < 2) continue;
+    sumLon += Number(pair[0]);
+    sumLat += Number(pair[1]);
+    count += 1;
+  }
+
+  if (!count) return { lat: null, lon: null };
+  return { lat: sumLat / count, lon: sumLon / count };
+};
 
 export const getZoneCentroids = async (ids) => {
   if (!ids.length) return [];
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.zoneBoundarySpatial;
   const placeholders = ids.map((_, idx) => `$${idx + 1}`).join(",");
-  const query = `
-    SELECT id, name,
-      ST_Y(ST_Centroid(boundary)) AS lat,
-      ST_X(ST_Centroid(boundary)) AS lon
+
+  if (usePostgis) {
+    const query = `
+      SELECT id, name,
+        ST_Y(ST_Centroid(boundary)) AS lat,
+        ST_X(ST_Centroid(boundary)) AS lon
+      FROM zones
+      WHERE id IN (${placeholders});
+    `;
+    const result = await pool.query(query, ids);
+    return result.rows;
+  }
+
+  const fallbackQuery = `
+    SELECT id, name, boundary
     FROM zones
     WHERE id IN (${placeholders});
   `;
-  const result = await pool.query(query, ids);
-  return result.rows;
+  const result = await pool.query(fallbackQuery, ids);
+  return result.rows.map((row) => {
+    const { lat, lon } = centroidFromGeometry(row.boundary);
+    return { id: row.id, name: row.name, lat, lon };
+  });
 };
 
 export const createPatrolRoute = async ({ name, created_by, status, risk_score, scheduled_for, stops }) => {

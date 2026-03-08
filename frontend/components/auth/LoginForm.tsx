@@ -25,6 +25,13 @@ export function LoginForm({ onSwitch }: { onSwitch?: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const handleSwitch = () => {
+    if (onSwitch) {
+      onSwitch();
+      return;
+    }
+    router.push("/signup");
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -153,10 +160,3 @@ export function LoginForm({ onSwitch }: { onSwitch?: () => void }) {
     </form>
   );
 }
-  const handleSwitch = () => {
-    if (onSwitch) {
-      onSwitch();
-      return;
-    }
-    router.push("/signup");
-  };

@@ -1,9 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import PatrolMap from "@/components/map/PatrolMap";
 import { generatePatrolRoute, fetchPatrolRoutes, fetchPatrolRouteById } from "@/services/patrol";
 import { apiGet } from "@/services/api";
+
+const PatrolMap = dynamic(() => import("@/components/map/PatrolMap"), { ssr: false });
 
 export default function PatrolsPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export default function PatrolsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-4 space-y-3">
+      <div className="dash-card dash-card-hover p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-600">
           <span>Route type:</span>
           <select
@@ -84,7 +86,7 @@ export default function PatrolsPage() {
             min={3}
           />
           <button
-            className="rounded border px-3 py-1 text-sm bg-zinc-900 text-white"
+            className="rounded-lg border bg-zinc-900 px-3 py-1 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
             onClick={handleGenerate}
             disabled={loading}
           >
@@ -96,16 +98,16 @@ export default function PatrolsPage() {
       {activeRoute?.stops?.length ? (
         <PatrolMap stops={activeRoute.stops} />
       ) : (
-        <div className="rounded-lg border bg-white p-6 text-sm text-zinc-500">
+        <div className="dash-card dash-card-hover p-6 text-sm text-zinc-500">
           Generate a route to preview the patrol path.
         </div>
       )}
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <h3 className="text-sm font-semibold text-zinc-700">Saved Patrol Routes</h3>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-3 py-2">Route</th>
                 <th className="px-3 py-2">Status</th>
@@ -140,11 +142,11 @@ export default function PatrolsPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="dash-card dash-card-hover p-4">
         <h3 className="text-sm font-semibold text-zinc-700">Risk-Based Patrol Schedule</h3>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-3 py-2">Zone</th>
                 <th className="px-3 py-2">Risk Score</th>
@@ -153,7 +155,7 @@ export default function PatrolsPage() {
             </thead>
             <tbody>
               {schedule.slice(0, 15).map((row) => (
-                <tr key={row.id} className="border-b last:border-0">
+                <tr key={row.id} className="last:border-0">
                   <td className="px-3 py-2">{row.name}</td>
                   <td className="px-3 py-2">{Number(row.score).toFixed(1)}</td>
                   <td className="px-3 py-2">{row.recommended_shift}</td>
