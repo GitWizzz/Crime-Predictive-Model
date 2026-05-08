@@ -7,8 +7,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body suppressHydrationWarning className="dark bg-zinc-950 text-zinc-100">
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <TopNav />
         <div className="min-h-[calc(100vh-56px)]">{children}</div>
       </body>

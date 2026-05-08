@@ -48,14 +48,24 @@ export default function PatrolMap({
   const markerPos = positions[idx] || [25.6, 85.2];
 
   return (
-    <div className="h-96 w-full overflow-hidden rounded-xl border border-zinc-200/80 shadow-sm dark:border-zinc-800">
+    <div className="relative h-96 w-full overflow-hidden rounded-[28px] border bg-[var(--bg-surface)] shadow-[var(--shadow-md)]">
+      <div className="map-panel absolute left-4 top-4 z-[1000] rounded-2xl px-3 py-2 text-xs font-medium text-[var(--fg-secondary)]">
+        Patrol route preview
+      </div>
       <MapContainer center={markerPos} zoom={8} className="h-full w-full">
         <TileLayer
-          attribution="Tiles &copy; Esri"
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          attribution="Tiles"
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
         <FitBounds positions={positions} />
-        {positions.length > 0 && <Polyline positions={positions} color="#22c55e" />}
+        {positions.length > 0 && (
+          <Polyline
+            positions={positions}
+            color="#3b6eff"
+            weight={5}
+            opacity={0.85}
+          />
+        )}
         <Marker position={markerPos} />
       </MapContainer>
     </div>
