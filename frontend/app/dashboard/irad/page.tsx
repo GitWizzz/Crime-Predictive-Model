@@ -1,140 +1,166 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { GeoJsonObject } from "geojson";
+import { Calendar, Filter, TrafficCone } from "lucide-react";
 import { fetchZones } from "@/services/zones";
-import { fetchIradHotspots, fetchIradAccidents, ingestIradAccidents } from "@/services/irad";
+import { fetchIradAccidents, fetchIradHotspots } from "@/services/irad";
 
 const HotspotsMap = dynamic(() => import("@/components/map/HotspotsMap"), { ssr: false });
 
+type HeatPoint = {
+  lat: number;
+  lon: number;
+  intensity: number;
+};
+
+type AccidentRow = {
+  id: number;
+  district?: string | null;
+  severity?: string | null;
+};
+
 export default function IradPage() {
-  const [token, setToken] = useState<string | null>(null);
-  const [districtsGeo, setDistrictsGeo] = useState<any | null>(null);
-  const [heatPoints, setHeatPoints] = useState<any[]>([]);
-  const [accidents, setAccidents] = useState<any[]>([]);
-  const [filters, setFilters] = useState({ startDate: "", endDate: "" });
-  const [message, setMessage] = useState<string | null>(null);
+  const [token] = useState<string | null>(() =>
+    typeof window !== "undefined" ? window.localStorage.getItem("authToken") : null
+  );
+  const [districtsGeo, setDistrictsGeo] = useState<GeoJsonObject | null>(null);
+  const [stateBoundary, setStateBoundary] = useState<GeoJsonObject | null>(null);
+  const [heatPoints, setHeatPoints] = useState<HeatPoint[]>([]);
+  const [accidents, setAccidents] = useState<AccidentRow[]>([]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setToken(window.localStorage.getItem("authToken"));
-    }
-  }, []);
-
-  useEffect(() => {
-    const loadZones = async () => {
+    const load = async () => {
       if (!token) return;
-      const res = await fetchZones(token, { type: "DISTRICT" });
-      setDistrictsGeo(res.data?.geojson || null);
+
+      const [districtRes, heatRes, listRes] = await Promise.all([
+        fetchZones(token, { type: "DISTRICT" }),
+        fetchIradHotspots(token),
+        fetchIradAccidents(token),
+      ]);
+
+      setDistrictsGeo(districtRes.data?.geojson || null);
+      setStateBoundary(districtRes.data?.state_boundary || null);
+      setHeatPoints((heatRes.data?.heat_points || []) as HeatPoint[]);
+      setAccidents((listRes.data || []) as AccidentRow[]);
     };
-    loadZones();
+
+    load();
   }, [token]);
 
-  const loadAccidents = async () => {
-    if (!token) return;
-    const params: Record<string, string> = {};
-    if (filters.startDate) params.startDate = filters.startDate;
-    if (filters.endDate) params.endDate = filters.endDate;
-    const [heatRes, listRes] = await Promise.all([
-      fetchIradHotspots(token, params),
-      fetchIradAccidents(token, params),
-    ]);
-    setHeatPoints(heatRes.data?.heat_points || []);
-    setAccidents(listRes.data || []);
-  };
+  const fatalCount = useMemo(
+    () =>
+      accidents.filter((row) =>
+        String(row.severity || "")
+          .toLowerCase()
+          .includes("fatal")
+      ).length,
+    [accidents]
+  );
 
-  useEffect(() => {
-    loadAccidents();
-  }, [token, filters]);
+  const topDistricts = useMemo(() => {
+    const counts = accidents.reduce<Record<string, number>>((acc, row) => {
+      const district = row.district || "Unknown";
+      acc[district] = (acc[district] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [accidents]);
 
-  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !token) return;
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    const items = Array.isArray(parsed) ? parsed : parsed.items;
-    if (!Array.isArray(items)) {
-      setMessage("Invalid IRAD JSON format.");
-      return;
-    }
-    const res = await ingestIradAccidents(token, items);
-    setMessage(`Inserted ${res.data?.inserted || 0} accident records.`);
-    await loadAccidents();
-    event.target.value = "";
-  };
+  const maxTop = Math.max(...topDistricts.map((item) => item.value), 1);
 
   return (
-    <div className="space-y-4">
-      <div className="dash-card dash-card-hover p-4 space-y-2">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-600">
-          <span>Date range:</span>
-          <input
-            type="date"
-            value={filters.startDate}
-            onChange={(e) => setFilters((prev) => ({ ...prev, startDate: e.target.value }))}
-            className="rounded border px-2 py-1 text-sm"
-          />
-          <span>to</span>
-          <input
-            type="date"
-            value={filters.endDate}
-            onChange={(e) => setFilters((prev) => ({ ...prev, endDate: e.target.value }))}
-            className="rounded border px-2 py-1 text-sm"
-          />
-          <button
-            className="rounded border px-2 py-1 text-sm"
-            onClick={() => setFilters({ startDate: "", endDate: "" })}
-          >
-            Clear
-          </button>
-        </div>
-        <div className="text-sm text-zinc-500">
-          Upload IRAD accidents JSON to ingest.
-          <input type="file" accept=".json" onChange={handleImport} className="ml-2 text-sm" />
-        </div>
-        {message && <div className="text-sm text-emerald-600">{message}</div>}
-      </div>
-
+    <div className="relative h-[calc(100vh-9.25rem)] min-h-[780px] overflow-hidden rounded-[28px] border bg-[var(--bg-surface)]">
       <HotspotsMap
         mode="kde"
         hotspots={[]}
         heatPoints={[]}
         accidentHeatPoints={heatPoints}
         districts={districtsGeo}
+        stateBoundary={stateBoundary}
+        showDistrictShading
       />
 
-      <div className="dash-card dash-card-hover p-4">
-        <h3 className="text-sm font-semibold text-zinc-700">Accident Records</h3>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
-              <tr>
-                <th className="px-3 py-2">Accident ID</th>
-                <th className="px-3 py-2">Date/Time</th>
-                <th className="px-3 py-2">Severity</th>
-                <th className="px-3 py-2">District</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accidents.map((row) => (
-                <tr key={row.id} className="last:border-0">
-                  <td className="px-3 py-2">{row.accident_id}</td>
-                  <td className="px-3 py-2">{new Date(row.date_time).toLocaleString()}</td>
-                  <td className="px-3 py-2">{row.severity}</td>
-                  <td className="px-3 py-2">{row.district || "-"}</td>
-                </tr>
-              ))}
-              {accidents.length === 0 && (
-                <tr>
-                  <td className="px-3 py-4 text-center text-sm text-zinc-500" colSpan={4}>
-                    No accident records yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <div className="absolute left-4 right-4 top-4 flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 rounded-[18px] border bg-[var(--bg-surface)]/95 p-1.5 shadow-[var(--shadow-sm)] backdrop-blur">
+          <button className="inline-flex h-10 items-center gap-2 rounded-[14px] px-3 text-sm text-[var(--fg-primary)]">
+            <Filter className="h-4 w-4 text-[var(--fg-tertiary)]" />
+            Severity: any
+          </button>
+          <span className="hidden h-5 w-px bg-[var(--border-default)] sm:block" />
+          <button className="inline-flex h-10 items-center gap-2 rounded-[14px] px-3 text-sm text-[var(--fg-primary)]">
+            <TrafficCone className="h-4 w-4 text-[var(--fg-tertiary)]" />
+            Road type: all
+          </button>
+          <span className="hidden h-5 w-px bg-[var(--border-default)] sm:block" />
+          <button className="inline-flex h-10 items-center gap-2 rounded-[14px] px-3 text-sm text-[var(--fg-primary)]">
+            <Calendar className="h-4 w-4 text-[var(--fg-tertiary)]" />
+            Last 90 days
+          </button>
         </div>
       </div>
+
+      <aside className="absolute bottom-4 right-4 top-4 w-[320px] overflow-y-auto rounded-[24px] border bg-[var(--bg-surface)] p-5 shadow-[var(--shadow-md)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
+          IRAD · Road safety
+        </p>
+        <h2 className="mt-1 text-[18px] font-semibold tracking-[-0.01em] text-[var(--fg-primary)]">
+          Accident hotspots
+        </h2>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="rounded-[18px] bg-[var(--bg-subtle)] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--fg-tertiary)]">
+              Total (90d)
+            </p>
+            <p className="text-[22px] font-bold tabular-nums text-[var(--fg-primary)]">
+              {accidents.length}
+            </p>
+          </div>
+          <div className="rounded-[18px] bg-[var(--bg-subtle)] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--fg-tertiary)]">
+              Fatal
+            </p>
+            <p className="text-[22px] font-bold tabular-nums text-[var(--risk-high)]">
+              {fatalCount}
+            </p>
+          </div>
+        </div>
+
+        <p className="mb-2 mt-5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
+          Top 5 stretches
+        </p>
+        <div className="space-y-2">
+          {topDistricts.map((district, index) => (
+            <div
+              key={district.name}
+              className="grid grid-cols-[1fr_30px] items-center gap-2 text-[12px]"
+            >
+              <div>
+                <p className="truncate text-[var(--fg-primary)]">{district.name}</p>
+                <span className="mt-1 block h-1 overflow-hidden rounded-full bg-[var(--bg-subtle)]">
+                  <span
+                    className={`block h-full rounded-full ${
+                      index < 2
+                        ? "bg-[var(--risk-high)]"
+                        : index < 4
+                          ? "bg-[var(--risk-medium)]"
+                          : "bg-[var(--accent-500)]"
+                    }`}
+                    style={{ width: `${(district.value / maxTop) * 100}%` }}
+                  />
+                </span>
+              </div>
+              <span className="text-right font-semibold tabular-nums text-[var(--fg-primary)]">
+                {district.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 }

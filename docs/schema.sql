@@ -1,15 +1,23 @@
 -- =============================================================================
 -- CRIME PREDICTIVE HOTSPOT MAPPING SYSTEM
--- Complete Database Schema — PostgreSQL 15 + PostGIS 3.4
+-- Complete Database Schema
 -- =============================================================================
--- Authoritative source of truth. Last updated: 2026-04-20
--- Run order: extensions → enums → core tables → feature tables →
---            indexes → triggers → views
+-- Authoritative source of truth. Last updated: 2026-05-09
 --
--- To apply fresh:
---   psql -U postgres -d crime_db -f schema.sql
+-- Environment note:
+--   Production target: PostgreSQL 15 + PostGIS 3.4 (GEOGRAPHY types, GIST indexes)
+--   Local dev:         PostgreSQL 18 — PostGIS not yet available for PG18.
+--                      Location fields use JSONB { "lat": ..., "lon": ... } instead.
+--                      The migration files in /backend/migrations handle this automatically.
 --
--- To apply via migrations:
+-- Database name: crime_hotspot_db  (local dev)  |  crime_db  (production target)
+--
+-- Run order: extensions → tables → indexes → triggers → views → seed
+--
+-- To apply fresh (local dev, no PostGIS):
+--   psql -U postgres -d crime_hotspot_db -f schema.sql
+--
+-- To apply via migrations (recommended — handles PG18 differences):
 --   npm run migrate:up  (in /backend)
 -- =============================================================================
 
@@ -53,13 +61,18 @@ CREATE TABLE IF NOT EXISTS users (
   name                   VARCHAR(255)  NOT NULL,
   email                  VARCHAR(255)  NOT NULL UNIQUE,
   password_hash          TEXT          NOT NULL,             -- bcrypt hash, rounds=12 minimum
-  role                   user_role     NOT NULL DEFAULT 'OFFICER',
-  -- Account lockout (Task 1.8)
+  role                   VARCHAR(20)   NOT NULL DEFAULT 'OFFICER' CHECK (role IN ('ADMIN','OFFICER','ANALYST')),
+  police_station         VARCHAR(100),                      -- Officer's home station
+  zone                   VARCHAR(100),                      -- Officer's assigned zone/district
+  -- Account lockout
   failed_login_attempts  INTEGER       NOT NULL DEFAULT 0,
   locked_until           TIMESTAMPTZ,                        -- NULL = not locked
   last_failed_login      TIMESTAMPTZ,
+  -- Mobile push notifications
+  fcm_token              TEXT,                               -- Firebase FCM device token
+  fcm_token_updated_at   TIMESTAMPTZ,
   -- Metadata
-  is_active              BOOLEAN       NOT NULL DEFAULT TRUE, -- soft disable without deletion
+  is_active              BOOLEAN       NOT NULL DEFAULT TRUE,
   last_login_at          TIMESTAMPTZ,
   created_at             TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ   NOT NULL DEFAULT NOW()
@@ -146,11 +159,13 @@ CREATE INDEX IF NOT EXISTS idx_cc_severity  ON crime_classifications(severity);
 CREATE TABLE IF NOT EXISTS zones (
   id           SERIAL          PRIMARY KEY,
   name         VARCHAR(255)    NOT NULL,
-  type         zone_type       NOT NULL DEFAULT 'DISTRICT',
-  boundary     GEOMETRY(MultiPolygon, 4326) NOT NULL,  -- WGS84 lat/lon polygons
-  parent_id    INTEGER         REFERENCES zones(id) ON DELETE SET NULL,  -- Station → parent District
-  district     VARCHAR(100),    -- Denormalized district name for fast queries
-  area_km2     NUMERIC(10,4),   -- Pre-computed area (avoid expensive ST_Area on every query)
+  type         VARCHAR(20)     NOT NULL DEFAULT 'DISTRICT' CHECK (type IN ('DISTRICT','STATION')),
+  -- Production (PostGIS): GEOMETRY(MultiPolygon, 4326)
+  -- Local dev (PG18): JSONB GeoJSON object
+  boundary     JSONB,
+  parent_id    INTEGER         REFERENCES zones(id) ON DELETE SET NULL,
+  district     VARCHAR(100),
+  area_km2     NUMERIC(10,4),
   created_at   TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
   UNIQUE (name, type)
@@ -185,12 +200,14 @@ CREATE TABLE IF NOT EXISTS firs (
   category             VARCHAR(100),                            -- Denormalized from classification
   severity             INTEGER       NOT NULL DEFAULT 1 CHECK (severity BETWEEN 1 AND 5),
   -- Time
-  occurred_at          TIMESTAMPTZ   NOT NULL,                  -- When the crime occurred (not when FIR was filed)
+  occurred_at          TIMESTAMPTZ   NOT NULL,                  -- When crime occurred (not FIR registration time)
   -- Location
-  location             GEOGRAPHY(Point, 4326),                  -- lat/lon of crime scene (WGS84)
+  -- Production (PostGIS): GEOGRAPHY(Point, 4326)
+  -- Local dev (PG18, no PostGIS): JSONB { "lat": 25.61, "lon": 85.14 }
+  location             JSONB,
   location_name        VARCHAR(255),                            -- Human-readable address/landmark
   police_station       VARCHAR(100),                            -- Police station jurisdiction
-  zone                 VARCHAR(100),                            -- District name (denormalized for fast GROUP BY)
+  zone                 VARCHAR(100),                            -- District name (denormalized for GROUP BY)
   zone_id              INTEGER       REFERENCES zones(id) ON DELETE SET NULL,
   -- Victim info
   victim_gender        VARCHAR(20)   CHECK (victim_gender IN ('MALE', 'FEMALE', 'TRANSGENDER', 'UNKNOWN')),
@@ -199,13 +216,12 @@ CREATE TABLE IF NOT EXISTS firs (
   -- Encrypted sensitive data
   sensitive_notes_enc  BYTEA,                                   -- pgp_sym_encrypt(notes, DB_ENCRYPTION_KEY)
   -- FIR lifecycle
-  status               fir_status    NOT NULL DEFAULT 'PENDING',
+  status               VARCHAR(30)   NOT NULL DEFAULT 'PENDING'
+                       CHECK (status IN ('PENDING','UNDER_INVESTIGATION','CHARGESHEETED','CLOSED','REFERRED')),
   description          TEXT,                                    -- Free-text FIR narrative
-  -- Full-text search (auto-maintained by trigger)
-  search_vector        TSVECTOR,
   -- Metadata
   registered_by        INTEGER       REFERENCES users(id) ON DELETE SET NULL,
-  source               VARCHAR(50)   NOT NULL DEFAULT 'MANUAL', -- 'MANUAL', 'BULK_IMPORT', 'CCTNS', 'API'
+  source               VARCHAR(50)   NOT NULL DEFAULT 'MANUAL',
   created_at           TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at           TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
@@ -318,24 +334,25 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at  ON audit_logs(created_at D
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS irad_accidents (
-  id           SERIAL        PRIMARY KEY,
-  accident_id  VARCHAR(100)  NOT NULL UNIQUE,   -- IRAD system ID
-  occurred_at  TIMESTAMPTZ   NOT NULL,
-  severity     INTEGER       NOT NULL DEFAULT 1 CHECK (severity BETWEEN 1 AND 3),
-  location     GEOGRAPHY(Point, 4326) NOT NULL,
-  location_name VARCHAR(255),
-  road_name    VARCHAR(255),
-  road_type    VARCHAR(50),                     -- 'NH', 'SH', 'MDR', 'ODR', 'VR'
-  district     VARCHAR(100),
-  police_station VARCHAR(100),
-  vehicles_involved INTEGER DEFAULT 1,
-  casualties   INTEGER       NOT NULL DEFAULT 0,
-  injuries     INTEGER       NOT NULL DEFAULT 0,
-  description  TEXT,
+  id                SERIAL        PRIMARY KEY,
+  accident_id       VARCHAR(100)  NOT NULL UNIQUE,
+  occurred_at       TIMESTAMPTZ   NOT NULL,
+  severity          INTEGER       NOT NULL DEFAULT 1 CHECK (severity BETWEEN 1 AND 3),
+  -- Production: GEOGRAPHY(Point, 4326) | Local dev: JSONB { "lat": ..., "lon": ... }
+  location          JSONB,
+  location_name     VARCHAR(255),
+  road_name         VARCHAR(255),
+  road_type         VARCHAR(50),               -- 'NH', 'SH', 'MDR', 'ODR', 'VR'
+  district          VARCHAR(100),
+  police_station    VARCHAR(100),
+  vehicles_involved INTEGER       DEFAULT 1,
+  casualties        INTEGER       NOT NULL DEFAULT 0,
+  injuries          INTEGER       NOT NULL DEFAULT 0,
+  description       TEXT,
   weather_condition VARCHAR(50),               -- 'CLEAR', 'RAIN', 'FOG', 'DUST'
-  light_condition   VARCHAR(50),               -- 'DAYLIGHT', 'DUSK', 'DARK_UNLIT', 'DARK_LIT'
-  source       VARCHAR(100)  NOT NULL DEFAULT 'IRAD',
-  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+  light_condition   VARCHAR(50),               -- 'DAYLIGHT', 'DUSK', 'DARK_LIT', 'DARK_UNLIT'
+  source            VARCHAR(100)  NOT NULL DEFAULT 'IRAD',
+  created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE  irad_accidents          IS 'Road accident records from IRAD system. Separate from FIRs.';
@@ -354,17 +371,21 @@ CREATE INDEX IF NOT EXISTS idx_irad_severity      ON irad_accidents(severity);
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS geo_fences (
-  id              SERIAL          PRIMARY KEY,
-  name            TEXT            NOT NULL,
-  type            geo_fence_type  NOT NULL DEFAULT 'CUSTOM',
-  boundary        GEOMETRY(Polygon, 4326) NOT NULL,  -- Fence polygon (draw on map)
-  alert_radius_m  INTEGER         NOT NULL DEFAULT 500,  -- Alert buffer around boundary
-  notify_roles    TEXT[]          NOT NULL DEFAULT ARRAY['ADMIN', 'OFFICER'],
+  id              SERIAL        PRIMARY KEY,
+  name            TEXT          NOT NULL,
+  type            VARCHAR(30)   NOT NULL DEFAULT 'CUSTOM'
+                  CHECK (type IN ('SCHOOL','HOSPITAL','GOVERNMENT','RELIGIOUS','BORDER','CUSTOM')),
+  -- GeoJSON Polygon object: { "type": "Polygon", "coordinates": [...] }
+  boundary        JSONB         NOT NULL,
+  -- Bounding box for fast pre-filter before precise containment check
+  bbox            JSONB,        -- { "minLat": ..., "maxLat": ..., "minLon": ..., "maxLon": ... }
+  alert_radius_m  INTEGER       NOT NULL DEFAULT 500,
+  notify_roles    TEXT[]        NOT NULL DEFAULT ARRAY['ADMIN','OFFICER'],
   description     TEXT,
-  active          BOOLEAN         NOT NULL DEFAULT TRUE,
-  created_by      INTEGER         REFERENCES users(id) ON DELETE SET NULL,
-  created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+  active          BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_by      INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE  geo_fences                IS 'Sensitive area polygons. Crimes within alert_radius trigger SSE alerts.';
@@ -532,6 +553,7 @@ END $$;
 
 -- View: fir_summary
 -- Joins FIRs with classification details. Used for analytics and exports.
+-- Production (PostGIS): replace (f.location->>'lat')::float with ST_Y(f.location::geometry)
 CREATE OR REPLACE VIEW fir_summary AS
 SELECT
   f.id,
@@ -547,13 +569,13 @@ SELECT
   f.occurred_at,
   EXTRACT(YEAR  FROM f.occurred_at)::INT           AS year,
   EXTRACT(MONTH FROM f.occurred_at)::INT           AS month,
-  EXTRACT(DOW   FROM f.occurred_at)::INT           AS day_of_week,   -- 0=Sunday
+  EXTRACT(DOW   FROM f.occurred_at)::INT           AS day_of_week,
   EXTRACT(HOUR  FROM f.occurred_at)::INT           AS hour_of_day,
   f.zone,
   f.police_station,
   f.location_name,
-  ST_Y(f.location::geometry)                       AS latitude,
-  ST_X(f.location::geometry)                       AS longitude,
+  (f.location->>'lat')::float                      AS latitude,
+  (f.location->>'lon')::float                      AS longitude,
   f.victim_gender,
   f.victim_age,
   f.victim_count,
@@ -592,6 +614,7 @@ COMMENT ON VIEW zone_crime_stats IS 'Aggregated per-zone crime statistics. Refre
 -- View: hotspot_candidates
 -- Recent high-severity crimes in the past 90 days for ML clustering.
 -- The hotspot service pulls from this view instead of raw firs table.
+-- Production (PostGIS): replace JSONB casts with ST_Y/ST_X(location::geometry)
 CREATE OR REPLACE VIEW hotspot_candidates AS
 SELECT
   id,
@@ -602,14 +625,80 @@ SELECT
   category,
   severity,
   occurred_at,
-  ST_Y(location::geometry) AS latitude,
-  ST_X(location::geometry) AS longitude
+  (location->>'lat')::float AS latitude,
+  (location->>'lon')::float AS longitude
 FROM firs
 WHERE location IS NOT NULL
+  AND location->>'lat' IS NOT NULL
   AND occurred_at >= NOW() - INTERVAL '90 days'
   AND status != 'CLOSED';
 
+
+-- View: dashboard_summary (used by GET /api/v1/dashboard/summary — mobile + web)
+CREATE OR REPLACE VIEW dashboard_summary AS
+SELECT
+  COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '24 hours') AS firs_last_24h,
+  COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '7 days')   AS firs_last_7d,
+  COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '30 days')  AS firs_last_30d,
+  COUNT(*) FILTER (WHERE status = 'PENDING')                          AS pending_firs,
+  MODE() WITHIN GROUP (ORDER BY crime_type)                           AS top_crime_type,
+  NOW()                                                               AS generated_at
+FROM firs;
+
 COMMENT ON VIEW hotspot_candidates IS 'Recent non-closed FIRs with location data. Input dataset for DBSCAN and KDE.';
+
+
+-- =============================================================================
+-- TABLE 14: alerts
+-- Crime spike alerts generated by anomaly detection pipeline.
+-- Feeds the /api/v1/alerts endpoints (web + mobile).
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS alerts (
+  id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  zone            VARCHAR(100)  NOT NULL,
+  crime_type      VARCHAR(100),
+  count           INTEGER       NOT NULL,
+  z_score         NUMERIC(6,3)  NOT NULL,
+  severity        VARCHAR(20)   NOT NULL DEFAULT 'MEDIUM'
+                  CHECK (severity IN ('LOW','MEDIUM','HIGH','CRITICAL')),
+  message         TEXT          NOT NULL,
+  -- Snapshot of anomaly stats: { expected, actual, stdDev, windowDays }
+  anomaly_details JSONB,
+  -- Array of user IDs who have read this alert
+  read_by         INTEGER[]     NOT NULL DEFAULT ARRAY[]::INTEGER[],
+  source          VARCHAR(50)   NOT NULL DEFAULT 'ANOMALY_DETECTION',
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE  alerts          IS 'Crime spike alerts from anomaly detection. Append-only — never update existing alerts.';
+COMMENT ON COLUMN alerts.read_by  IS 'Array of user IDs. Check with = ANY(read_by) in queries.';
+
+CREATE INDEX IF NOT EXISTS idx_alerts_zone       ON alerts(zone);
+CREATE INDEX IF NOT EXISTS idx_alerts_severity   ON alerts(severity);
+CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at DESC);
+
+
+-- =============================================================================
+-- TABLE 15: user_preferences
+-- Per-user dashboard and notification settings.
+-- Feeds the /dashboard/settings page and mobile ProfileScreen.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id               INTEGER       PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  default_zone          VARCHAR(100),                      -- Pre-selected zone on dashboard load
+  theme                 VARCHAR(20)   NOT NULL DEFAULT 'dark',
+  language              VARCHAR(10)   NOT NULL DEFAULT 'en',
+  notification_enabled  BOOLEAN       NOT NULL DEFAULT TRUE,
+  email_alerts_enabled  BOOLEAN       NOT NULL DEFAULT FALSE,
+  map_default_layer     VARCHAR(20)   NOT NULL DEFAULT 'clusters',  -- 'clusters'|'heatmap'|'both'
+  extras                JSONB         NOT NULL DEFAULT '{}'::JSONB, -- For future settings without migration
+  updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE  user_preferences         IS 'One row per user. Auto-created on first settings access.';
+COMMENT ON COLUMN user_preferences.extras  IS 'Flexible JSONB bucket for new settings that do not need their own column.';
 
 
 -- =============================================================================
@@ -641,6 +730,10 @@ CREATE TABLE IF NOT EXISTS schema_versions (
 
 INSERT INTO schema_versions (version, description)
 VALUES ('2026-04-20-v2', 'Full schema: users, firs, zones, classifications, audit, irad, patrol, geo_fences, attachments')
+ON CONFLICT (version) DO NOTHING;
+
+INSERT INTO schema_versions (version, description)
+VALUES ('2026-05-09-v3', 'Schema alignment: JSONB locations for PG18, missing columns on all tables, new tables (refresh_tokens, fir_attachments, geo_fences, patrol_logs, alerts, user_preferences), 4 views, fcm_token on users')
 ON CONFLICT (version) DO NOTHING;
 
 

@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { Bell, CalendarDays, ChevronRight, LogOut, Moon, Plus, Sparkles, Sun } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const PAGE_TITLES: Record<string, { title: string; eyebrow: string }> = {
@@ -21,8 +22,10 @@ const PAGE_TITLES: Record<string, { title: string; eyebrow: string }> = {
 
 export default function Topbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const title = PAGE_TITLES[pathname] || PAGE_TITLES["/dashboard"];
   const router = useRouter();
+  const hideChrome = pathname === "/dashboard/firs" && searchParams.get("compose") === "1";
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") return "dark";
     const saved = window.localStorage.getItem("theme");
@@ -45,6 +48,10 @@ export default function Topbar() {
     }
     router.push("/landing_page");
   };
+
+  if (hideChrome) {
+    return null;
+  }
 
   return (
     <header className="border-b border-[var(--border-default)] bg-white/55 px-5 py-4 backdrop-blur-xl dark:bg-[#15181d]/78 md:px-7">
@@ -85,10 +92,13 @@ export default function Topbar() {
             <Bell className="h-4 w-4" />
           </button>
 
-          <button className="flex items-center gap-2 rounded-2xl bg-[var(--accent-500)] px-3.5 py-2 text-sm font-semibold text-white shadow-[var(--shadow-sm)] transition hover:bg-[var(--accent-600)]">
+          <Link
+            href="/dashboard/firs?compose=1"
+            className="flex items-center gap-2 rounded-2xl bg-[var(--accent-500)] px-3.5 py-2 text-sm font-semibold text-white shadow-[var(--shadow-sm)] transition hover:bg-[var(--accent-600)]"
+          >
             <Plus className="h-4 w-4" />
             Register FIR
-          </button>
+          </Link>
 
           <button
             className="flex items-center gap-2 rounded-2xl border border-[var(--risk-high)]/20 bg-[var(--risk-high-bg)] px-3 py-2 text-sm font-medium text-[var(--risk-high)] transition hover:opacity-90"

@@ -2,6 +2,8 @@
 
 import type { ChangeEvent, Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Calendar,
   ChevronDown,
@@ -38,6 +40,15 @@ type FIR = {
 
 type FIRQueryParams = Record<string, string | number>;
 
+type AuthUser = {
+  name?: string;
+  email?: string;
+  role?: string;
+  zone?: string;
+  policeStation?: string;
+  police_station?: string;
+};
+
 type CreateFirState = {
   fir_no: string;
   crime_type: string;
@@ -64,6 +75,21 @@ const initialCreateState: CreateFirState = {
   longitude: "",
   police_station: "",
   zone: "",
+};
+
+const buildInitialCreateState = (user?: AuthUser | null): CreateFirState => {
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+  const station = user?.policeStation || user?.police_station || "";
+  const zone = user?.zone || (station.includes("Patna") ? "Patna Central" : "");
+
+  return {
+    ...initialCreateState,
+    fir_no: `FIR-${stamp}`,
+    date_time: new Date(Date.now() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+    police_station: station,
+    zone,
+  };
 };
 
 const FilterSection = ({
@@ -151,7 +177,21 @@ const buildCsv = (rows: FIR[]) => {
 };
 
 export default function FIRsPage() {
-  const [token, setToken] = useState<string | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [token] = useState<string | null>(() =>
+    typeof window !== "undefined" ? window.localStorage.getItem("authToken") : null
+  );
+  const [authUser] = useState<AuthUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = window.localStorage.getItem("authUser");
+      return stored ? (JSON.parse(stored) as AuthUser) : null;
+    } catch {
+      return null;
+    }
+  });
   const [firs, setFirs] = useState<FIR[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -169,15 +209,21 @@ export default function FIRsPage() {
   const [victimGenderFilters, setVictimGenderFilters] = useState<string[]>([]);
   const [attachmentFilters, setAttachmentFilters] = useState<string[]>([]);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newFir, setNewFir] = useState<CreateFirState>(initialCreateState);
+  const [newFir, setNewFir] = useState<CreateFirState>(() => buildInitialCreateState(authUser));
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const queryComposeOpen = searchParams.get("compose") === "1";
+  const composeOpen = queryComposeOpen;
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setToken(window.localStorage.getItem("authToken"));
-    }
-  }, []);
+  const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
+
+  const MapPickerWrapper = () => (
+    // show MapPicker with current coordinates; updates `newFir` when user picks position
+    <MapPicker
+      lat={newFir.latitude ? Number(newFir.latitude) : undefined}
+      lng={newFir.longitude ? Number(newFir.longitude) : undefined}
+      onChange={(lat, lng) => setNewFir((current) => ({ ...current, latitude: String(lat.toFixed(6)), longitude: String(lng.toFixed(6)) }))}
+    />
+  );
 
   useEffect(() => {
     const loadFIRs = async () => {
@@ -316,6 +362,11 @@ export default function FIRsPage() {
       return;
     }
 
+    if (!newFir.crime_type || !newFir.date_time || !newFir.police_station || !newFir.zone) {
+      setError("Crime type, date & time, police station, and zone are required.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setCreateMessage(null);
@@ -323,12 +374,14 @@ export default function FIRsPage() {
     try {
       await createFIR(token, {
         ...newFir,
-        latitude: Number(newFir.latitude),
-        longitude: Number(newFir.longitude),
+        latitude: newFir.latitude ? Number(newFir.latitude) : undefined,
+        longitude: newFir.longitude ? Number(newFir.longitude) : undefined,
       });
       setCreateMessage("FIR created successfully.");
-      setNewFir(initialCreateState);
-      setShowCreateForm(false);
+      setNewFir(buildInitialCreateState(authUser));
+      if (queryComposeOpen) {
+        router.replace(pathname);
+      }
       setPage(1);
       const refresh = await fetchFIRs(token, { page: 1, limit });
       setFirs((refresh.data?.items || []) as FIR[]);
@@ -339,6 +392,150 @@ export default function FIRsPage() {
       setLoading(false);
     }
   };
+
+  const openCompose = () => {
+    setCreateMessage(null);
+    setError(null);
+    setNewFir(buildInitialCreateState(authUser));
+    router.replace(`${pathname}?compose=1`);
+  };
+
+  const closeCompose = () => {
+    setError(null);
+    setNewFir(buildInitialCreateState(authUser));
+    if (queryComposeOpen) {
+      router.replace(pathname);
+    }
+  };
+
+  if (composeOpen) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-3 py-4 md:px-4 md:py-6">
+        <div className="surface-card flex min-h-[calc(100vh-2rem)] flex-1 flex-col rounded-[24px] p-5 md:p-6">
+          <div className="mb-4 flex items-center justify-between gap-4 border-b pb-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">Register FIR</p>
+                <div className="h-1.5 w-[1px] bg-[var(--border-default)]/50" />
+                <div className="text-xs text-[var(--fg-tertiary)]">Quick entry</div>
+              </div>
+              <h1 className="mt-2 text-[24px] font-semibold tracking-[-0.02em] text-[var(--fg-primary)] truncate">Create a new incident report</h1>
+              <p className="mt-1 text-[13px] text-[var(--fg-secondary)]">Enter core details, pick location, then review before saving.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={closeCompose} className="rounded-lg border bg-[var(--bg-surface)] px-3 py-2 text-sm font-medium text-[var(--fg-primary)] transition hover:bg-[var(--bg-subtle)]">Close</button>
+            </div>
+          </div>
+
+          <div className="grid flex-1 gap-6 xl:grid-cols-[1.5fr_0.75fr]">
+            <div className="space-y-5">
+              <div className="rounded-[14px] border bg-[var(--bg-surface)] p-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-[var(--fg-primary)]">Core details</h2>
+                  <div className="text-xs text-[var(--fg-tertiary)]">Required *</div>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {[
+                    { key: "fir_no", label: "FIR no", required: true },
+                    { key: "crime_type", label: "Crime type", required: true, placeholder: "Theft, Assault, Burglary..." },
+                    { key: "date_time", label: "Date & time", type: "datetime-local", required: true },
+                    { key: "severity", label: "Severity", select: true },
+                    { key: "police_station", label: "Police station", required: true },
+                    { key: "zone", label: "Zone", required: true },
+                  ].map((field) => (
+                    <label key={field.key} className="space-y-1 text-sm">
+                      <div className="flex items-center justify-between text-[13px] text-[var(--fg-secondary)]">
+                        <span>{field.label}{field.required ? " *" : ""}</span>
+                      </div>
+                      {field.select ? (
+                        <select value={newFir.severity} onChange={(event) => setNewFir((current) => ({ ...current, severity: Number(event.target.value) }))} className="h-11 w-full rounded-[10px] border bg-[var(--bg-surface)] px-3 text-sm text-[var(--fg-primary)] outline-none transition focus:border-[var(--accent-400)]">
+                          <option value={1}>1 · Low</option>
+                          <option value={2}>2 · Guarded</option>
+                          <option value={3}>3 · Moderate</option>
+                          <option value={4}>4 · High</option>
+                          <option value={5}>5 · Critical</option>
+                        </select>
+                      ) : (
+                        <input type={field.type || "text"} placeholder={field.placeholder} value={newFir[field.key as keyof CreateFirState] as string} onChange={(event) => setNewFir((current) => ({ ...current, [field.key]: event.target.value }))} className="h-11 w-full rounded-[10px] border bg-[var(--bg-surface)] px-3 text-sm text-[var(--fg-primary)] outline-none transition focus:border-[var(--accent-400)]" />
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[14px] border bg-[var(--bg-surface)] p-4">
+                <h3 className="text-sm font-semibold text-[var(--fg-primary)]">Location</h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {[{ key: "latitude", label: "Latitude", placeholder: "25.5941" }, { key: "longitude", label: "Longitude", placeholder: "85.1376" }].map((field) => (
+                    <label key={field.key} className="space-y-1 text-sm">
+                      <div className="text-[13px] text-[var(--fg-secondary)]">{field.label}</div>
+                      <input type="text" placeholder={field.placeholder} value={newFir[field.key as keyof CreateFirState] as string} onChange={(event) => setNewFir((current) => ({ ...current, [field.key]: event.target.value }))} className="h-11 w-full rounded-[10px] border bg-[var(--bg-surface)] px-3 text-sm text-[var(--fg-primary)] outline-none transition focus:border-[var(--accent-400)]" />
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-3 text-sm text-[var(--fg-tertiary)]">Use the map on the right to pick a precise location.</div>
+              </div>
+
+              <div className="rounded-[14px] border bg-[var(--bg-surface)] p-4">
+                <h3 className="text-sm font-semibold text-[var(--fg-primary)]">Classification</h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {[{ key: "act_type", label: "Act", placeholder: "IPC / NDPS / IT Act" }, { key: "section_code", label: "Section", placeholder: "379 / 354A / 457..." }, { key: "category", label: "Category", placeholder: "Property, Violent, Safety...", wide: true }].map((field) => (
+                    <label key={field.key} className={`${field.wide ? "md:col-span-2" : ""} space-y-1 text-sm`}>
+                      <div className="text-[13px] text-[var(--fg-secondary)]">{field.label}</div>
+                      <input type="text" placeholder={field.placeholder} value={newFir[field.key as keyof CreateFirState] as string} onChange={(event) => setNewFir((current) => ({ ...current, [field.key]: event.target.value }))} className="h-11 w-full rounded-[10px] border bg-[var(--bg-surface)] px-3 text-sm text-[var(--fg-primary)] outline-none transition focus:border-[var(--accent-400)]" />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-5">
+              <div className="rounded-[14px] border bg-[var(--bg-subtle)] p-3">
+                  <div className="h-40 w-full overflow-hidden rounded-[10px]">
+                    {/* MapPicker is dynamically imported to avoid SSR issues */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <MapPickerWrapper />
+                  </div>
+                <div className="mt-3 space-y-3">
+                  <div className="rounded-[10px] border bg-[var(--bg-surface)] p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[var(--fg-secondary)]">Crime type</span>
+                      <span className="font-medium text-[var(--fg-primary)]">{newFir.crime_type || "Not set"}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-[var(--fg-secondary)]">Police station</span>
+                      <span className="font-medium text-[var(--fg-primary)]">{newFir.police_station || "Not set"}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-[var(--fg-secondary)]">Zone</span>
+                      <span className="font-medium text-[var(--fg-primary)]">{newFir.zone || "Not set"}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-[var(--fg-secondary)]">Severity</span>
+                      <span className="font-medium text-[var(--fg-primary)]">{newFir.severity}/5</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[10px] border bg-[var(--bg-surface)] p-3 text-sm text-[var(--fg-secondary)]">
+                    Exact coordinates improve hotspot quality and patrol routing. Coordinates are optional.
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-auto flex flex-col gap-3">
+                <div className="text-sm text-[var(--fg-tertiary)]">{createMessage ? createMessage : "Required: crime type, date & time, police station, zone."}</div>
+                <div className="flex w-full gap-3">
+                  <button onClick={closeCompose} className="flex-1 h-11 rounded-[10px] border bg-[var(--bg-surface)] text-sm font-medium text-[var(--fg-primary)]">Cancel</button>
+                  <button onClick={handleCreate} disabled={loading} className="flex-1 h-11 rounded-[10px] bg-[var(--accent-500)] text-sm font-semibold text-white">{loading ? "Saving..." : "Create FIR"}</button>
+                </div>
+                <button onClick={() => {}} className="w-full text-sm text-[var(--fg-tertiary)]">Save draft</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-5">
@@ -379,7 +576,7 @@ export default function FIRsPage() {
             Export CSV
           </button>
           <button
-            onClick={() => setShowCreateForm((current) => !current)}
+            onClick={openCompose}
             className="inline-flex h-10 items-center gap-2 rounded-[14px] bg-[var(--accent-500)] px-4 text-sm font-semibold text-white"
           >
             <Plus className="h-4 w-4" />
@@ -387,84 +584,6 @@ export default function FIRsPage() {
           </button>
         </div>
       </div>
-
-      {showCreateForm ? (
-        <div className="surface-card rounded-[24px] p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
-                Register FIR
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-[var(--fg-primary)]">
-                Add a new report
-              </h2>
-            </div>
-            <button
-              onClick={() => setShowCreateForm(false)}
-              className="text-[var(--fg-tertiary)] transition hover:text-[var(--fg-primary)]"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
-            {[
-              { key: "fir_no", label: "FIR no" },
-              { key: "crime_type", label: "Crime type" },
-              { key: "act_type", label: "Act" },
-              { key: "section_code", label: "Section" },
-              { key: "category", label: "Category" },
-              { key: "date_time", label: "Date & time", type: "datetime-local" },
-              { key: "latitude", label: "Latitude" },
-              { key: "longitude", label: "Longitude" },
-              { key: "police_station", label: "Police station" },
-              { key: "zone", label: "Zone" },
-            ].map((field) => (
-              <label key={field.key} className="space-y-2 text-sm">
-                <span className="text-[var(--fg-secondary)]">{field.label}</span>
-                <input
-                  type={field.type || "text"}
-                  value={newFir[field.key as keyof CreateFirState] as string}
-                  onChange={(event) =>
-                    setNewFir((current) => ({
-                      ...current,
-                      [field.key]: event.target.value,
-                    }))
-                  }
-                  className="h-11 w-full rounded-[14px] border bg-[var(--bg-surface)] px-3 text-sm text-[var(--fg-primary)] outline-none transition focus:border-[var(--accent-400)]"
-                />
-              </label>
-            ))}
-            <label className="space-y-2 text-sm">
-              <span className="text-[var(--fg-secondary)]">Severity</span>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={newFir.severity}
-                onChange={(event) =>
-                  setNewFir((current) => ({
-                    ...current,
-                    severity: Number(event.target.value),
-                  }))
-                }
-                className="h-11 w-full rounded-[14px] border bg-[var(--bg-surface)] px-3 text-sm text-[var(--fg-primary)] outline-none transition focus:border-[var(--accent-400)]"
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 flex items-center gap-3">
-            <button
-              onClick={handleCreate}
-              disabled={loading}
-              className="inline-flex h-11 items-center rounded-[14px] bg-[var(--accent-500)] px-4 text-sm font-semibold text-white"
-            >
-              {loading ? "Saving..." : "Create FIR"}
-            </button>
-            {createMessage ? <span className="text-sm text-[var(--risk-low)]">{createMessage}</span> : null}
-          </div>
-        </div>
-      ) : null}
 
       {error ? (
         <div className="rounded-[20px] border border-[var(--risk-high)]/20 bg-[var(--risk-high-bg)] px-4 py-3 text-sm text-[var(--risk-high)]">

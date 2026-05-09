@@ -86,6 +86,13 @@
     font-feature-settings: "cv11", "ss01", "ss03";
   }
 
+  .dark body {
+    background:
+      radial-gradient(circle at top left, rgba(59, 110, 255, 0.06), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(59, 110, 255, 0.03), transparent 24%),
+      var(--bg-base);
+  }
+
   ::selection {
     background: var(--accent-100);
     color: var(--fg-primary);
@@ -111,6 +118,13 @@
     background:
       radial-gradient(circle at 8% 12%, rgba(59, 110, 255, 0.14), transparent 24%),
       radial-gradient(circle at 92% 0%, rgba(245, 158, 11, 0.12), transparent 24%),
+      linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 92%, white 8%), var(--bg-base));
+  }
+
+  .dark .app-shell-bg {
+    background:
+      radial-gradient(circle at 8% 12%, rgba(59, 110, 255, 0.12), transparent 22%),
+      radial-gradient(circle at 92% 0%, rgba(59, 110, 255, 0.04), transparent 22%),
       linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 92%, white 8%), var(--bg-base));
   }
 

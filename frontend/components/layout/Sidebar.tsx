@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   Bell,
   Car,
@@ -57,6 +57,12 @@ const navGroups = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const hideChrome = pathname === "/dashboard/firs" && searchParams.get("compose") === "1";
+
+  if (hideChrome) {
+    return null;
+  }
 
   return (
     <aside className="surface-card hidden h-full w-72 shrink-0 rounded-r-[28px] border-l-0 border-t-0 border-b-0 bg-white/78 lg:flex lg:flex-col dark:bg-[#15181d]/92">

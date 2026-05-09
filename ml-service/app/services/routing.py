@@ -36,6 +36,7 @@ def optimize_routes(req: RouteRequest) -> RouteResponse:
 
     search_params = pywrapcp.DefaultRoutingSearchParameters()
     search_params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+    search_params.time_limit.seconds = 10
 
     solution = routing.SolveWithParameters(search_params)
     if not solution:

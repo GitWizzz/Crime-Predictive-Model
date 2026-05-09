@@ -9,11 +9,11 @@ export const getZoneAnalytics = async ({ type = "DISTRICT", startDate, endDate }
   let dateFilter = "";
 
   if (startDate) {
-    dateFilter += ` AND f.date_time >= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    dateFilter += ` AND f.date_time <= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
@@ -194,23 +194,23 @@ export const getSeasonalTrends = async ({ granularity = "month", startDate, endD
   let dateFilter = "";
 
   if (startDate) {
-    dateFilter += ` AND date_time >= $${paramIndex++}`;
+    dateFilter += ` AND occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    dateFilter += ` AND date_time <= $${paramIndex++}`;
+    dateFilter += ` AND occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
-  let labelExpr = "to_char(date_time, 'Mon')";
-  let orderExpr = "extract(month from date_time)";
+  let labelExpr = "to_char(occurred_at, 'Mon')";
+  let orderExpr = "extract(month from occurred_at)";
   if (granularity === "weekday") {
-    labelExpr = "to_char(date_time, 'Dy')";
-    orderExpr = "extract(dow from date_time)";
+    labelExpr = "to_char(occurred_at, 'Dy')";
+    orderExpr = "extract(dow from occurred_at)";
   }
   if (granularity === "hour") {
-    labelExpr = "lpad(extract(hour from date_time)::text, 2, '0')";
-    orderExpr = "extract(hour from date_time)";
+    labelExpr = "lpad(extract(hour from occurred_at)::text, 2, '0')";
+    orderExpr = "extract(hour from occurred_at)";
   }
 
   const query = `
@@ -235,20 +235,20 @@ export const getTimeSeriesCounts = async ({ interval = "day", startDate, endDate
   let dateFilter = "";
 
   if (startDate) {
-    dateFilter += ` AND date_time >= $${paramIndex++}`;
+    dateFilter += ` AND occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    dateFilter += ` AND date_time <= $${paramIndex++}`;
+    dateFilter += ` AND occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
   const bucket =
     interval === "month"
-      ? "date_trunc('month', date_time)"
+      ? "date_trunc('month', occurred_at)"
       : interval === "week"
-        ? "date_trunc('week', date_time)"
-        : "date_trunc('day', date_time)";
+        ? "date_trunc('week', occurred_at)"
+        : "date_trunc('day', occurred_at)";
 
   const query = `
     SELECT
@@ -273,30 +273,30 @@ export const getBehavioralIncidents = async ({ startDate, endDate }) => {
   let dateFilter = "";
 
   if (startDate) {
-    dateFilter += ` AND f.date_time >= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    dateFilter += ` AND f.date_time <= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
   const latExpr = usePostgis
     ? "ST_Y(f.location::geometry)"
-    : "(f.location->>'latitude')::double precision";
+    : "(f.location->>'lat')::double precision";
   const lonExpr = usePostgis
     ? "ST_X(f.location::geometry)"
-    : "(f.location->>'longitude')::double precision";
+    : "(f.location->>'lon')::double precision";
   const locationFilter = usePostgis
     ? "f.location IS NOT NULL"
-    : "f.location IS NOT NULL AND f.location ? 'latitude' AND f.location ? 'longitude'";
+    : "f.location IS NOT NULL AND f.location ? 'lat' AND f.location ? 'lon'";
 
   const query = `
     SELECT
       f.id,
       ${latExpr} AS latitude,
       ${lonExpr} AS longitude,
-      f.date_time,
+      f.occurred_at AS date_time,
       f.crime_type,
       COALESCE(f.severity, c.severity, 1)::float AS severity
     FROM firs f
@@ -319,11 +319,11 @@ export const getWomenSafetyIncidents = async ({ zone, startDate, endDate }) => {
   let dateFilter = "";
 
   if (startDate) {
-    dateFilter += ` AND f.date_time >= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    dateFilter += ` AND f.date_time <= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
   if (zone) {
@@ -333,20 +333,20 @@ export const getWomenSafetyIncidents = async ({ zone, startDate, endDate }) => {
 
   const latExpr = usePostgis
     ? "ST_Y(f.location::geometry)"
-    : "(f.location->>'latitude')::double precision";
+    : "(f.location->>'lat')::double precision";
   const lonExpr = usePostgis
     ? "ST_X(f.location::geometry)"
-    : "(f.location->>'longitude')::double precision";
+    : "(f.location->>'lon')::double precision";
   const locationFilter = usePostgis
     ? "f.location IS NOT NULL"
-    : "f.location IS NOT NULL AND f.location ? 'latitude' AND f.location ? 'longitude'";
+    : "f.location IS NOT NULL AND f.location ? 'lat' AND f.location ? 'lon'";
 
   const query = `
     SELECT
       f.id,
       ${latExpr} AS latitude,
       ${lonExpr} AS longitude,
-      f.date_time,
+      f.occurred_at AS date_time,
       f.crime_type,
       COALESCE(f.severity, c.severity, 1)::float AS severity
     FROM firs f
@@ -370,10 +370,10 @@ export const getWomenSafetyFIRs = async ({ zone, startDate, endDate, page = 1, l
   const usePostgis = capabilities.firLocationSpatial;
   const lonExpr = usePostgis
     ? "ST_X(f.location::geometry)"
-    : "(f.location->>'longitude')::double precision";
+    : "(f.location->>'lon')::double precision";
   const latExpr = usePostgis
     ? "ST_Y(f.location::geometry)"
-    : "(f.location->>'latitude')::double precision";
+    : "(f.location->>'lat')::double precision";
 
   const values = [];
   let paramIndex = 1;
@@ -383,11 +383,11 @@ export const getWomenSafetyFIRs = async ({ zone, startDate, endDate, page = 1, l
     values.push(zone);
   }
   if (startDate) {
-    filters += ` AND f.date_time >= $${paramIndex++}`;
+    filters += ` AND f.occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    filters += ` AND f.date_time <= $${paramIndex++}`;
+    filters += ` AND f.occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
@@ -396,8 +396,8 @@ export const getWomenSafetyFIRs = async ({ zone, startDate, endDate, page = 1, l
       f.id, f.fir_no, f.crime_type, f.section, f.act_type, f.section_code,
       COALESCE(f.severity, c.severity, 1) AS severity,
       COALESCE(f.category, c.category) AS category,
-      f.victim_gender, f.victim_age, f.victim_count, f.date_time,
-      f.date_time AS occurred_at,
+      f.victim_gender, f.victim_age, f.victim_count, f.occurred_at,
+      f.occurred_at AS date_time,
       ${lonExpr} AS longitude,
       ${latExpr} AS latitude,
       f.police_station, f.zone, f.location_name, f.status, f.description,
@@ -408,7 +408,7 @@ export const getWomenSafetyFIRs = async ({ zone, startDate, endDate, page = 1, l
       OR (c.act_type = f.act_type AND c.section_code = f.section_code)
     WHERE (c.is_women_safety = true OR f.category IN ('WomenSafety', 'Women Safety'))
     ${filters}
-    ORDER BY f.date_time DESC
+    ORDER BY f.occurred_at DESC
     LIMIT $${paramIndex++} OFFSET $${paramIndex++};
   `;
   values.push(safeLimit, offset);
@@ -432,13 +432,13 @@ export const getZoneComparison = async ({ zones, crimeType, year }) => {
     `
       SELECT
         zone,
-        to_char(date_trunc('month', date_time), 'YYYY-MM') AS month,
+        to_char(date_trunc('month', occurred_at), 'YYYY-MM') AS month,
         COUNT(*)::int AS count,
         SUM(CASE WHEN COALESCE(severity, 1) >= 3 THEN 1 ELSE 0 END)::int AS serious_count
       FROM firs
       WHERE zone = ANY($1::text[])
         AND ($2::text IS NULL OR crime_type = $2)
-        AND EXTRACT(YEAR FROM date_time) = $3
+        AND EXTRACT(YEAR FROM occurred_at) = $3
       GROUP BY zone, month
       ORDER BY zone, month;
     `,
@@ -461,13 +461,13 @@ export const getHeatmapTimelineBuckets = async ({ zone, crimeType, startDate, en
   const usePostgis = capabilities.firLocationSpatial;
   const latExpr = usePostgis
     ? "ST_Y(location::geometry)"
-    : "(location->>'latitude')::double precision";
+    : "(location->>'lat')::double precision";
   const lonExpr = usePostgis
     ? "ST_X(location::geometry)"
-    : "(location->>'longitude')::double precision";
+    : "(location->>'lon')::double precision";
   const locationFilter = usePostgis
     ? "location IS NOT NULL"
-    : "location IS NOT NULL AND location ? 'latitude' AND location ? 'longitude'";
+    : "location IS NOT NULL AND location ? 'lat' AND location ? 'lon'";
 
   const values = [];
   let paramIndex = 1;
@@ -481,25 +481,25 @@ export const getHeatmapTimelineBuckets = async ({ zone, crimeType, startDate, en
     values.push(crimeType);
   }
   if (startDate) {
-    filters += ` AND date_time >= $${paramIndex++}`;
+    filters += ` AND occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    filters += ` AND date_time <= $${paramIndex++}`;
+    filters += ` AND occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
   const result = await pool.query(
     `
       SELECT
-        to_char(date_trunc('month', date_time), 'YYYY-MM') AS bucket,
+        to_char(date_trunc('month', occurred_at), 'YYYY-MM') AS bucket,
         ${latExpr} AS lat,
         ${lonExpr} AS lon,
         COALESCE(severity, 1)::float AS intensity
       FROM firs
       WHERE ${locationFilter}
       ${filters}
-      ORDER BY bucket ASC, date_time ASC;
+      ORDER BY bucket ASC, occurred_at ASC;
     `,
     values
   );
@@ -540,21 +540,23 @@ export const getFIRExportRows = async ({ zone, crimeType, status, startDate, end
     values.push(status);
   }
   if (startDate) {
-    filters += ` AND date_time >= $${paramIndex++}`;
+    filters += ` AND occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    filters += ` AND date_time <= $${paramIndex++}`;
+    filters += ` AND occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
   const result = await pool.query(
     `
-      SELECT fir_no, crime_type, section_code, severity, date_time, police_station, zone, status
+      SELECT fir_no, crime_type, section_code, severity,
+             occurred_at AS date_time,
+             police_station, zone, status
       FROM firs
       WHERE 1=1
       ${filters}
-      ORDER BY date_time DESC
+      ORDER BY occurred_at DESC
       LIMIT 5000;
     `,
     values
@@ -570,11 +572,11 @@ export const getRiskInputs = async ({ startDate, endDate, type = "DISTRICT" }) =
   let dateFilter = "";
 
   if (startDate) {
-    dateFilter += ` AND f.date_time >= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    dateFilter += ` AND f.date_time <= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
@@ -608,7 +610,7 @@ export const getRiskInputs = async ({ startDate, endDate, type = "DISTRICT" }) =
           z.name,
           COUNT(f.id)::float AS frequency,
           AVG(f.resolved_severity)::float AS avg_severity,
-          MAX(f.date_time) AS last_incident,
+          MAX(f.occurred_at) AS last_incident,
           COUNT(DISTINCT f.crime_type)::float AS distinct_crimes,
           1.0::float AS area_m2
         FROM zone_base z
@@ -656,7 +658,7 @@ export const getRiskInputs = async ({ startDate, endDate, type = "DISTRICT" }) =
         z.name,
         COUNT(f.id)::float AS frequency,
         AVG(f.resolved_severity)::float AS avg_severity,
-        MAX(f.date_time) AS last_incident,
+        MAX(f.occurred_at) AS last_incident,
         COUNT(DISTINCT f.crime_type)::float AS distinct_crimes,
         ST_Area(z.boundary::geography)::float AS area_m2
       FROM zone_base z

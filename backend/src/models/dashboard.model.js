@@ -26,25 +26,25 @@ export const getMobileDashboardSummary = async ({ zone }) => {
       SELECT zone
       FROM scoped_firs
       WHERE zone IS NOT NULL
-        AND date_time >= NOW() - INTERVAL '30 days'
+        AND occurred_at >= NOW() - INTERVAL '30 days'
       GROUP BY zone
       HAVING COUNT(*) >= 5
       ORDER BY COUNT(*) DESC
       LIMIT 5
     )
     SELECT
-      COUNT(*) FILTER (WHERE date_time >= NOW() - INTERVAL '30 days')::int AS active_hotspots,
+      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '30 days')::int AS active_hotspots,
       COUNT(DISTINCT police_station) FILTER (WHERE police_station IS NOT NULL)::int AS stations_covered,
       COALESCE(
         ROUND(
-          100 * COUNT(*) FILTER (WHERE date_time >= NOW() - INTERVAL '30 days')::numeric
+          100 * COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '30 days')::numeric
           / NULLIF(COUNT(*)::numeric, 0)
         )::int,
         0
       ) AS forecast_confidence,
       COUNT(*) FILTER (WHERE status = 'PENDING')::int AS pending_firs,
-      COUNT(*) FILTER (WHERE date_time >= NOW() - INTERVAL '24 hours')::int AS firs_last_24h,
-      COUNT(*) FILTER (WHERE date_time >= NOW() - INTERVAL '7 days')::int AS firs_last_7d,
+      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '24 hours')::int AS firs_last_24h,
+      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '7 days')::int AS firs_last_7d,
       COALESCE((SELECT crime_type FROM top_crime), 'N/A') AS top_crime_type,
       COALESCE((SELECT json_agg(zone) FROM high_risk), '[]'::json) AS high_risk_zones
     FROM scoped_firs;

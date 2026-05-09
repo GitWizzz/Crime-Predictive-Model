@@ -66,5 +66,7 @@ def run_forecast(req: ForecastRequest) -> ForecastResponse:
             for _, row in forecast.iterrows()
         ]
         return ForecastResponse(points=points)
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Prophet forecast failed, using baseline: %s", exc)
         return _build_baseline_forecast(df, req.periods, req.freq)

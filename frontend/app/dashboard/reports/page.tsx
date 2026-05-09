@@ -1,220 +1,158 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  Legend,
-} from "recharts";
-import { fetchFIRs } from "@/services/hotspots";
-import { fetchForecast } from "@/services/ml";
+import { useState } from "react";
+import { BarChart3, Car, ClipboardList, FileText, Sparkles } from "lucide-react";
 
-type SeriesPoint = {
-  ds: string;
-  y: number;
-};
+type Tab = "quick" | "sched" | "arch";
 
-type ForecastPoint = {
-  ds: string;
-  yhat: number;
-  yhat_lower: number;
-  yhat_upper: number;
-};
+const quickReports = [
+  { title: "Weekly digest", desc: "7-day FIR + hotspot summary", icon: FileText },
+  { title: "Monthly SP brief", desc: "30-day full picture for SP", icon: ClipboardList },
+  { title: "Incident summary", desc: "Single-incident PDF dossier", icon: FileText },
+  { title: "Zone comparison", desc: "Side-by-side metrics", icon: BarChart3 },
+  { title: "Forecast pack", desc: "30-day forecast + drivers", icon: Sparkles },
+  { title: "Patrol performance", desc: "Unit-level completion stats", icon: Car },
+];
 
-const buildSeries = (firs: any[]): SeriesPoint[] => {
-  const bucket = new Map();
-  firs.forEach((fir) => {
-    if (!fir.date_time) return;
-    const date = new Date(fir.date_time);
-    const key = date.toISOString().slice(0, 10);
-    bucket.set(key, (bucket.get(key) || 0) + 1);
-  });
-
-  const series = Array.from(bucket.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => ({
-      ds: `${key}T00:00:00Z`,
-      y: value,
-    }));
-
-  return series;
-};
+const scheduledReports = [
+  {
+    report: "Weekly digest",
+    schedule: "Mon 06:00 IST",
+    recipients: "sp@bihar.police.in +4",
+    lastRun: "May 06, 06:00",
+  },
+  {
+    report: "Monthly SP brief",
+    schedule: "1st of month",
+    recipients: "sp@bihar.police.in",
+    lastRun: "May 01, 09:00",
+  },
+  {
+    report: "Patrol performance",
+    schedule: "Daily 23:30",
+    recipients: "leadership · 12 users",
+    lastRun: "May 07, 23:30",
+  },
+];
 
 export default function ReportsPage() {
-  const [token, setToken] = useState<string | null>(null);
-  const [periods, setPeriods] = useState(14);
-  const [series, setSeries] = useState<SeriesPoint[]>([]);
-  const [forecast, setForecast] = useState<ForecastPoint[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setToken(window.localStorage.getItem("authToken"));
-    }
-  }, []);
-
-  const loadForecast = async () => {
-    if (!token) {
-      setError("Missing auth token. Set localStorage key authToken after login.");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetchFIRs(token, { limit: 200 });
-      const firs = res.data?.items || [];
-      const builtSeries = buildSeries(firs);
-
-      if (builtSeries.length < 2) {
-        throw new Error("Not enough FIR data to generate forecast.");
-      }
-
-      setSeries(builtSeries);
-      const forecastRes = await fetchForecast(token, {
-        series: builtSeries,
-        periods: Number(periods) || 14,
-        freq: "D",
-      });
-
-      setForecast(forecastRes.data?.points || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Forecast failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const lastActual = useMemo(() => series.slice(-14), [series]);
-  const chartData = useMemo(() => {
-    const map = new Map<string, { date: string; actual?: number; forecast?: number }>();
-
-    series.forEach((point) => {
-      const date = point.ds.slice(0, 10);
-      map.set(date, { date, actual: point.y });
-    });
-
-    forecast.forEach((point) => {
-      const date = point.ds.slice(0, 10);
-      const existing = map.get(date) || { date };
-      existing.forecast = point.yhat;
-      map.set(date, existing);
-    });
-
-    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [series, forecast]);
+  const [tab, setTab] = useState<Tab>("quick");
 
   return (
-    <div className="space-y-4">
-      <div className="dash-card dash-card-hover p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <label className="text-sm text-zinc-500">Forecast days</label>
-            <Input
-              type="number"
-              min={7}
-              max={60}
-              value={periods}
-              onChange={(event) => setPeriods(Number(event.target.value))}
-              className="w-32"
-            />
-          </div>
-          <Button onClick={loadForecast} disabled={loading}>
-            {loading ? "Generating..." : "Generate Forecast"}
-          </Button>
-        </div>
+    <div className="mx-auto max-w-[1440px] space-y-4">
+      <div>
+        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+          Reports
+        </h1>
+        <p className="mt-1 text-[13px] text-[var(--fg-secondary)]">
+          Pre-built templates and scheduled exports
+        </p>
       </div>
 
-      {error && (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="dash-card dash-card-hover p-4">
-        <div className="text-sm text-zinc-500 mb-3">Prediction Chart</div>
-        {chartData.length === 0 ? (
-          <div className="text-sm text-zinc-500">No chart data yet.</div>
-        ) : (
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="actual"
-                  name="Actual"
-                  stroke="#2563eb"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="forecast"
-                  name="Forecast"
-                  stroke="#16a34a"
-                  strokeWidth={2}
-                  strokeDasharray="6 3"
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: "quick", label: "Quick reports" },
+          { id: "sched", label: "Scheduled" },
+          { id: "arch", label: "Archive", count: 24 },
+        ].map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setTab(item.id as Tab)}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${
+              tab === item.id
+                ? "border-[var(--accent-500)] bg-[var(--accent-50)] text-[var(--accent-700)]"
+                : "bg-[var(--bg-surface)] text-[var(--fg-secondary)]"
+            }`}
+          >
+            {item.label}
+            {"count" in item ? (
+              <span className="rounded-full bg-[var(--bg-subtle)] px-2 py-0.5 text-[11px]">
+                {item.count}
+              </span>
+            ) : null}
+          </button>
+        ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="dash-card dash-card-hover">
-          <div className="border-b px-4 py-2 text-sm text-zinc-500">
-            Last 14 days (Actual)
-          </div>
-          <div className="p-4">
-            {lastActual.length === 0 ? (
-              <div className="text-sm text-zinc-500">No data yet.</div>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {lastActual.map((point) => (
-                  <li key={point.ds} className="flex justify-between">
-                    <span>{point.ds.slice(0, 10)}</span>
-                    <span className="font-medium">{point.y}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+      {tab === "quick" ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {quickReports.map((report) => (
+            <section
+              key={report.title}
+              className="surface-card rounded-[24px] p-5 transition hover:border-[var(--border-strong)]"
+            >
+              <span className="mb-3 inline-grid h-10 w-10 place-items-center rounded-[14px] bg-[var(--accent-50)] text-[var(--accent-600)]">
+                <report.icon className="h-4 w-4" />
+              </span>
+              <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--fg-primary)]">
+                {report.title}
+              </h2>
+              <p className="mt-1 text-[12.5px] text-[var(--fg-secondary)]">{report.desc}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button className="rounded-[12px] border bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-medium text-[var(--fg-primary)]">
+                  PDF
+                </button>
+                <button className="rounded-[12px] border bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-medium text-[var(--fg-primary)]">
+                  CSV
+                </button>
+                <button className="rounded-[12px] px-3 py-1.5 text-xs font-medium text-[var(--fg-secondary)] transition hover:bg-[var(--bg-subtle)]">
+                  Schedule
+                </button>
+              </div>
+            </section>
+          ))}
         </div>
+      ) : null}
 
-        <div className="dash-card dash-card-hover">
-          <div className="border-b px-4 py-2 text-sm text-zinc-500">
-            Forecast (Next {periods} days)
+      {tab === "sched" ? (
+        <section className="surface-card overflow-hidden rounded-[24px] p-0">
+          <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_80px] border-b bg-[var(--bg-subtle)]/60 px-5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--fg-tertiary)]">
+            <span>Report</span>
+            <span>Schedule</span>
+            <span>Recipients</span>
+            <span>Last run</span>
+            <span />
           </div>
-          <div className="p-4">
-            {forecast.length === 0 ? (
-              <div className="text-sm text-zinc-500">No forecast generated.</div>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {forecast.map((point) => (
-                  <li key={point.ds} className="flex justify-between">
-                    <span>{point.ds.slice(0, 10)}</span>
-                    <span className="font-medium">{point.yhat.toFixed(2)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      </div>
+          {scheduledReports.map((row) => (
+            <div
+              key={row.report}
+              className="grid grid-cols-[1.5fr_1fr_1fr_1fr_80px] items-center border-b px-5 py-3 text-[12.5px] last:border-0"
+            >
+              <span className="font-medium text-[var(--fg-primary)]">{row.report}</span>
+              <span className="text-[var(--fg-secondary)]">{row.schedule}</span>
+              <span className="truncate text-[var(--fg-secondary)]">{row.recipients}</span>
+              <span className="tabular-nums text-[var(--fg-tertiary)]">{row.lastRun}</span>
+              <span className="text-right">
+                <button className="rounded-[10px] px-2 py-1 text-xs font-medium text-[var(--fg-secondary)] transition hover:bg-[var(--bg-subtle)]">
+                  Edit
+                </button>
+              </span>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
+      {tab === "arch" ? (
+        <section className="surface-card overflow-hidden rounded-[24px] p-0">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div
+              key={index}
+              className="grid grid-cols-[1.5fr_1fr_120px_100px] items-center border-b px-5 py-3 text-[12.5px] last:border-0 hover:bg-[var(--bg-subtle)]/50"
+            >
+              <span className="font-medium text-[var(--fg-primary)]">
+                Weekly digest · Week {18 - index}, 2026
+              </span>
+              <span className="text-[var(--fg-secondary)]">Generated by system</span>
+              <span className="tabular-nums text-[var(--fg-tertiary)]">
+                May {6 - index}, 06:00
+              </span>
+              <button className="rounded-[12px] border bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-medium text-[var(--fg-primary)]">
+                Download
+              </button>
+            </div>
+          ))}
+        </section>
+      ) : null}
     </div>
   );
 }

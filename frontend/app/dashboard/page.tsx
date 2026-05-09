@@ -321,10 +321,13 @@ export default function DashboardPage() {
             <Filter className="h-4 w-4" />
             Filters
           </button>
-          <button className="inline-flex items-center gap-2 rounded-2xl bg-[var(--accent-500)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-sm)]">
+          <Link
+            href="/dashboard/firs?compose=1"
+            className="inline-flex items-center gap-2 rounded-2xl bg-[var(--accent-500)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-sm)]"
+          >
             <Plus className="h-4 w-4" />
             Register FIR
-          </button>
+          </Link>
         </div>
       </div>
 

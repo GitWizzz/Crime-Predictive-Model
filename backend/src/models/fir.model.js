@@ -16,6 +16,7 @@ export const createFIR = async ({
     victim_count,
     sensitive_notes,
     date_time,
+    occurred_at,
     latitude,
     longitude,
     location_name,
@@ -25,28 +26,29 @@ export const createFIR = async ({
     description,
     source,
 }) => {
+    const ts = occurred_at || date_time;
     const capabilities = await getSpatialCapabilities();
     const usePostgis = capabilities.firLocationSpatial;
     const locationExpr = usePostgis
         ? "CASE WHEN $15 IS NULL OR $14 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($15, $14), 4326) END"
-        : "CASE WHEN $15 IS NULL OR $14 IS NULL THEN NULL ELSE jsonb_build_object('type','Point','coordinates',jsonb_build_array($15,$14),'latitude',$14,'longitude',$15) END";
+        : "CASE WHEN $15 IS NULL OR $14 IS NULL THEN NULL ELSE jsonb_build_object('lat',$14,'lon',$15) END";
     const lonExpr = usePostgis
         ? "ST_X(location::geometry)"
-        : "(location->>'longitude')::double precision";
+        : "(location->>'lon')::double precision";
     const latExpr = usePostgis
         ? "ST_Y(location::geometry)"
-        : "(location->>'latitude')::double precision";
+        : "(location->>'lat')::double precision";
 
     const query = `
     INSERT INTO firs (
       fir_no, crime_type, section, act_type, section_code, severity, category, classification_id,
-      victim_gender, victim_age, sensitive_notes_enc, date_time, location, police_station, zone,
+      victim_gender, victim_age, sensitive_notes_enc, occurred_at, location, police_station, zone,
       victim_count, location_name, status, description, source
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
       CASE WHEN $11 IS NULL THEN NULL ELSE pgp_sym_encrypt($11, $12) END,
       $13, ${locationExpr}, $16, $17, $18, $19, $20, $21, $22)
-    RETURNING id, fir_no, crime_type, section, date_time, date_time AS occurred_at,
+    RETURNING id, fir_no, crime_type, section, occurred_at, occurred_at AS date_time,
            ${lonExpr} as longitude,
            ${latExpr} as latitude,
            police_station, zone, act_type, section_code, severity, category, classification_id,
@@ -65,7 +67,7 @@ export const createFIR = async ({
         victim_age || null,
         sensitive_notes || null,
         env.dbEncryptionKey || "change_me",
-        date_time,
+        ts,
         latitude,
         longitude,
         police_station,
@@ -86,14 +88,14 @@ export const getFIRById = async (id) => {
     const usePostgis = capabilities.firLocationSpatial;
     const lonExpr = usePostgis
         ? "ST_X(location::geometry)"
-        : "(location->>'longitude')::double precision";
+        : "(location->>'lon')::double precision";
     const latExpr = usePostgis
         ? "ST_Y(location::geometry)"
-        : "(location->>'latitude')::double precision";
+        : "(location->>'lat')::double precision";
     const query = `
     SELECT id, fir_no, crime_type, section, act_type, section_code, severity, category,
-           classification_id, victim_gender, victim_age, victim_count, date_time,
-           date_time AS occurred_at,
+           classification_id, victim_gender, victim_age, victim_count, occurred_at,
+           occurred_at AS date_time,
            ${lonExpr} as longitude,
            ${latExpr} as latitude,
            police_station, zone, location_name, status, description, source
@@ -123,15 +125,15 @@ export const getFIRs = async ({
     const usePostgis = capabilities.firLocationSpatial;
     const lonExpr = usePostgis
         ? "ST_X(location::geometry)"
-        : "(location->>'longitude')::double precision";
+        : "(location->>'lon')::double precision";
     const latExpr = usePostgis
         ? "ST_Y(location::geometry)"
-        : "(location->>'latitude')::double precision";
+        : "(location->>'lat')::double precision";
 
     let query = `
     SELECT id, fir_no, crime_type, section, act_type, section_code, severity, category,
-           classification_id, victim_gender, victim_age, victim_count, date_time,
-           date_time AS occurred_at,
+           classification_id, victim_gender, victim_age, victim_count, occurred_at,
+           occurred_at AS date_time,
            ${lonExpr} as longitude,
            ${latExpr} as latitude,
            police_station, zone, location_name, status, description, source,
@@ -158,12 +160,12 @@ export const getFIRs = async ({
     }
 
     if (startDate) {
-        query += ` AND date_time >= $${paramIndex++}`;
+        query += ` AND occurred_at >= $${paramIndex++}`;
         values.push(startDate);
     }
 
     if (endDate) {
-        query += ` AND date_time <= $${paramIndex++}`;
+        query += ` AND occurred_at <= $${paramIndex++}`;
         values.push(endDate);
     }
 
@@ -182,7 +184,7 @@ export const getFIRs = async ({
         values.push(status);
     }
 
-    query += ` ORDER BY date_time DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    query += ` ORDER BY occurred_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
 
     values.push(safeLimit, offset);
 
@@ -220,7 +222,7 @@ export const createFIRsBulk = async (items) => {
             item.classification_id || null,
             item.victim_gender || null,
             item.victim_age || null,
-            item.date_time,
+            item.occurred_at || item.date_time,
             item.latitude ?? null,
             item.longitude ?? null,
             item.police_station || null,
@@ -234,28 +236,29 @@ export const createFIRsBulk = async (items) => {
 
         const locationExpr = usePostgis
             ? `CASE WHEN $${baseIndex + 13} IS NULL OR $${baseIndex + 12} IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($${baseIndex + 13}, $${baseIndex + 12}), 4326) END`
-            : `CASE WHEN $${baseIndex + 13} IS NULL OR $${baseIndex + 12} IS NULL THEN NULL ELSE jsonb_build_object('type','Point','coordinates',jsonb_build_array($${baseIndex + 13},$${baseIndex + 12}),'latitude',$${baseIndex + 12},'longitude',$${baseIndex + 13}) END`;
+            : `CASE WHEN $${baseIndex + 13} IS NULL OR $${baseIndex + 12} IS NULL THEN NULL ELSE jsonb_build_object('lat',$${baseIndex + 12},'lon',$${baseIndex + 13}) END`;
 
         return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, ${locationExpr}, $${baseIndex + 14}, $${baseIndex + 15}, $${baseIndex + 16}, $${baseIndex + 17}, $${baseIndex + 18}, $${baseIndex + 19}, $${baseIndex + 20})`;
     });
 
     const lonExpr = usePostgis
         ? "ST_X(location::geometry)"
-        : "(location->>'longitude')::double precision";
+        : "(location->>'lon')::double precision";
     const latExpr = usePostgis
         ? "ST_Y(location::geometry)"
-        : "(location->>'latitude')::double precision";
+        : "(location->>'lat')::double precision";
 
     const query = `
     INSERT INTO firs (
       fir_no, crime_type, section, act_type, section_code, severity, category, classification_id,
-      victim_gender, victim_age, date_time, location, police_station, zone,
+      victim_gender, victim_age, occurred_at, location, police_station, zone,
       victim_count, location_name, status, description, source
     )
     VALUES ${placeholders.join(", ")}
     ON CONFLICT (fir_no) DO NOTHING
     RETURNING id, fir_no, crime_type, section, act_type, section_code, severity, category,
-              classification_id, victim_gender, victim_age, victim_count, date_time, date_time AS occurred_at,
+              classification_id, victim_gender, victim_age, victim_count, occurred_at,
+              occurred_at AS date_time,
               ${lonExpr} as longitude,
               ${latExpr} as latitude,
               police_station, zone, location_name, status, description, source;
@@ -273,10 +276,10 @@ export const searchFIRRecords = async ({ q, zone, page = 1, limit = 50 }) => {
     const usePostgis = capabilities.firLocationSpatial;
     const lonExpr = usePostgis
         ? "ST_X(location::geometry)"
-        : "(location->>'longitude')::double precision";
+        : "(location->>'lon')::double precision";
     const latExpr = usePostgis
         ? "ST_Y(location::geometry)"
-        : "(location->>'latitude')::double precision";
+        : "(location->>'lat')::double precision";
 
     const values = [`%${q}%`];
     let paramIndex = 2;
@@ -288,8 +291,8 @@ export const searchFIRRecords = async ({ q, zone, page = 1, limit = 50 }) => {
 
     const query = `
       SELECT id, fir_no, crime_type, section, act_type, section_code, severity, category,
-             classification_id, victim_gender, victim_age, victim_count, date_time,
-             date_time AS occurred_at,
+             classification_id, victim_gender, victim_age, victim_count, occurred_at,
+             occurred_at AS date_time,
              ${lonExpr} as longitude,
              ${latExpr} as latitude,
              police_station, zone, location_name, status, description, source,
@@ -311,7 +314,7 @@ export const searchFIRRecords = async ({ q, zone, page = 1, limit = 50 }) => {
         OR COALESCE(zone, '') ILIKE $1
       )
       ${zoneFilter}
-      ORDER BY relevance DESC, date_time DESC
+      ORDER BY relevance DESC, occurred_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++};
     `;
 

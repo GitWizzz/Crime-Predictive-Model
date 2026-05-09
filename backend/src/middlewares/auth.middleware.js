@@ -10,6 +10,8 @@ export const protect = (req, res, next) => {
   ) {
     token = req.headers.authorization.split(" ")[1];
   } else if (req.query && req.query.token) {
+    // Browser EventSource (SSE) cannot set custom headers, so query-param token
+    // is the only option. Acceptable trade-off; restrict to GET-only SSE routes.
     token = req.query.token;
   } else if (req.headers["x-access-token"]) {
     token = req.headers["x-access-token"];

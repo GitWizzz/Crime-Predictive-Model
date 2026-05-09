@@ -4,13 +4,13 @@ const selectAlertFields = `
   a.id,
   a.zone,
   a.crime_type,
-  a.incident_count,
+  a.count        AS incident_count,
   a.z_score,
   a.severity,
   a.message,
   a.anomaly_details,
   a.created_at,
-  (r.alert_id IS NOT NULL) AS is_read
+  ($1 = ANY(a.read_by)) AS is_read
 `;
 
 export const getAlerts = async ({ userId, zone, severity, unreadOnly, page = 1, limit = 20 }) => {
@@ -32,16 +32,13 @@ export const getAlerts = async ({ userId, zone, severity, unreadOnly, page = 1, 
   }
 
   if (unreadOnly) {
-    filters += " AND r.alert_id IS NULL";
+    filters += ` AND NOT ($1 = ANY(a.read_by))`;
   }
 
   const listQuery = `
     SELECT ${selectAlertFields},
            COUNT(*) OVER()::int AS total_count
-    FROM crime_alerts a
-    LEFT JOIN crime_alert_reads r
-      ON r.alert_id = a.id
-      AND r.user_id = $1
+    FROM alerts a
     WHERE 1=1
     ${filters}
     ORDER BY a.created_at DESC
@@ -50,12 +47,9 @@ export const getAlerts = async ({ userId, zone, severity, unreadOnly, page = 1, 
 
   const countQuery = `
     SELECT COUNT(*)::int AS unread_count
-    FROM crime_alerts a
-    LEFT JOIN crime_alert_reads r
-      ON r.alert_id = a.id
-      AND r.user_id = $1
-    WHERE r.alert_id IS NULL
-    ${zone ? "AND a.zone = $2" : ""};
+    FROM alerts a
+    WHERE NOT ($1 = ANY(a.read_by))
+    ${zone ? `AND a.zone = $2` : ""};
   `;
 
   const listValues = [...values, safeLimit, offset];
@@ -76,25 +70,20 @@ export const getAlerts = async ({ userId, zone, severity, unreadOnly, page = 1, 
 export const getAlertById = async ({ id, userId }) => {
   const result = await pool.query(
     `SELECT ${selectAlertFields}
-     FROM crime_alerts a
-     LEFT JOIN crime_alert_reads r
-       ON r.alert_id = a.id
-       AND r.user_id = $2
-     WHERE a.id = $1`,
-    [id, userId]
+     FROM alerts a
+     WHERE a.id = $2`,
+    [userId, id]
   );
   return result.rows[0];
 };
 
 export const markAlertRead = async ({ id, userId }) => {
   const result = await pool.query(
-    `INSERT INTO crime_alert_reads (alert_id, user_id)
-     SELECT id, $2
-     FROM crime_alerts
+    `UPDATE alerts
+     SET read_by = array_append(read_by, $2)
      WHERE id = $1
-     ON CONFLICT (alert_id, user_id)
-     DO UPDATE SET read_at = current_timestamp
-     RETURNING alert_id`,
+       AND NOT ($2 = ANY(read_by))
+     RETURNING id`,
     [id, userId]
   );
   return result.rows[0];
