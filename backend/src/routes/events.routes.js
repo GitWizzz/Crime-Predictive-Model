@@ -4,7 +4,7 @@ import { onEvent } from "../utils/eventBus.js";
 
 const router = express.Router();
 
-router.get("/stream", protect, (req, res) => {
+const streamEvents = (req, res) => {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -22,6 +22,9 @@ router.get("/stream", protect, (req, res) => {
   req.on("close", () => {
     unsubscribe();
   });
-});
+};
+
+router.get("/stream", protect, streamEvents);
+router.get("/subscribe", protect, streamEvents);
 
 export default router;

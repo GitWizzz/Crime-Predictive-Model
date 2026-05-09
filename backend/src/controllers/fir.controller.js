@@ -1,4 +1,4 @@
-import { createNewFIR, fetchFIRById, fetchFIRs, createBulkFIRs } from "../services/fir.service.js";
+import { createNewFIR, fetchFIRById, fetchFIRs, createBulkFIRs, searchFIRsByText } from "../services/fir.service.js";
 import { emitEvent } from "../utils/eventBus.js";
 
 export const addFIR = async (req, res) => {
@@ -45,28 +45,7 @@ export const getFIR = async (req, res) => {
 
 export const listFIRs = async (req, res) => {
     try {
-        const {
-            crime_type,
-            act_type,
-            section_code,
-            startDate,
-            endDate,
-            zone,
-            police_station,
-            page,
-            limit,
-        } = req.query;
-        const result = await fetchFIRs({
-            crime_type,
-            act_type,
-            section_code,
-            startDate,
-            endDate,
-            zone,
-            police_station,
-            page,
-            limit,
-        });
+        const result = await fetchFIRs(req.query);
         return res.status(200).json({
             success: true,
             message: "FIRs retrieved successfully",
@@ -83,7 +62,7 @@ export const listFIRs = async (req, res) => {
 
 export const bulkAddFIRs = async (req, res) => {
     try {
-        const { items } = req.body;
+        const items = req.body.items || req.body.firs;
         const rows = await createBulkFIRs(items);
         emitEvent("fir_bulk_created", { inserted: rows.length });
         return res.status(201).json({
@@ -97,6 +76,23 @@ export const bulkAddFIRs = async (req, res) => {
         });
     } catch (error) {
         return res.status(400).json({
+            success: false,
+            message: error.message,
+            data: null,
+        });
+    }
+};
+
+export const searchFIRs = async (req, res) => {
+    try {
+        const result = await searchFIRsByText(req.query);
+        return res.status(200).json({
+            success: true,
+            message: "FIR search completed successfully",
+            data: result,
+        });
+    } catch (error) {
+        return res.status(500).json({
             success: false,
             message: error.message,
             data: null,

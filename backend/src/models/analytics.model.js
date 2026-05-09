@@ -311,7 +311,7 @@ export const getBehavioralIncidents = async ({ startDate, endDate }) => {
   return result.rows;
 };
 
-export const getWomenSafetyIncidents = async ({ startDate, endDate }) => {
+export const getWomenSafetyIncidents = async ({ zone, startDate, endDate }) => {
   const capabilities = await getSpatialCapabilities();
   const usePostgis = capabilities.firLocationSpatial;
   const values = [];
@@ -325,6 +325,10 @@ export const getWomenSafetyIncidents = async ({ startDate, endDate }) => {
   if (endDate) {
     dateFilter += ` AND f.date_time <= $${paramIndex++}`;
     values.push(endDate);
+  }
+  if (zone) {
+    dateFilter += ` AND f.zone = $${paramIndex++}`;
+    values.push(zone);
   }
 
   const latExpr = usePostgis
@@ -355,6 +359,206 @@ export const getWomenSafetyIncidents = async ({ startDate, endDate }) => {
   `;
 
   const result = await pool.query(query, values);
+  return result.rows;
+};
+
+export const getWomenSafetyFIRs = async ({ zone, startDate, endDate, page = 1, limit = 50 }) => {
+  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  const safePage = Math.max(parseInt(page, 10) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.firLocationSpatial;
+  const lonExpr = usePostgis
+    ? "ST_X(f.location::geometry)"
+    : "(f.location->>'longitude')::double precision";
+  const latExpr = usePostgis
+    ? "ST_Y(f.location::geometry)"
+    : "(f.location->>'latitude')::double precision";
+
+  const values = [];
+  let paramIndex = 1;
+  let filters = "";
+  if (zone) {
+    filters += ` AND f.zone = $${paramIndex++}`;
+    values.push(zone);
+  }
+  if (startDate) {
+    filters += ` AND f.date_time >= $${paramIndex++}`;
+    values.push(startDate);
+  }
+  if (endDate) {
+    filters += ` AND f.date_time <= $${paramIndex++}`;
+    values.push(endDate);
+  }
+
+  const query = `
+    SELECT
+      f.id, f.fir_no, f.crime_type, f.section, f.act_type, f.section_code,
+      COALESCE(f.severity, c.severity, 1) AS severity,
+      COALESCE(f.category, c.category) AS category,
+      f.victim_gender, f.victim_age, f.victim_count, f.date_time,
+      f.date_time AS occurred_at,
+      ${lonExpr} AS longitude,
+      ${latExpr} AS latitude,
+      f.police_station, f.zone, f.location_name, f.status, f.description,
+      COUNT(*) OVER() AS total_count
+    FROM firs f
+    LEFT JOIN crime_classifications c
+      ON c.id = f.classification_id
+      OR (c.act_type = f.act_type AND c.section_code = f.section_code)
+    WHERE (c.is_women_safety = true OR f.category IN ('WomenSafety', 'Women Safety'))
+    ${filters}
+    ORDER BY f.date_time DESC
+    LIMIT $${paramIndex++} OFFSET $${paramIndex++};
+  `;
+  values.push(safeLimit, offset);
+  const result = await pool.query(query, values);
+  const total = result.rows[0]?.total_count ? parseInt(result.rows[0].total_count, 10) : 0;
+  const items = result.rows.map(({ total_count, ...row }) => row);
+  return {
+    items,
+    firs: items,
+    total,
+    page: safePage,
+    limit: safeLimit,
+    total_pages: Math.ceil(total / safeLimit),
+  };
+};
+
+export const getZoneComparison = async ({ zones, crimeType, year }) => {
+  const zoneList = zones.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 4);
+  const selectedYear = year || new Date().getFullYear();
+  const result = await pool.query(
+    `
+      SELECT
+        zone,
+        to_char(date_trunc('month', date_time), 'YYYY-MM') AS month,
+        COUNT(*)::int AS count,
+        SUM(CASE WHEN COALESCE(severity, 1) >= 3 THEN 1 ELSE 0 END)::int AS serious_count
+      FROM firs
+      WHERE zone = ANY($1::text[])
+        AND ($2::text IS NULL OR crime_type = $2)
+        AND EXTRACT(YEAR FROM date_time) = $3
+      GROUP BY zone, month
+      ORDER BY zone, month;
+    `,
+    [zoneList, crimeType || null, selectedYear]
+  );
+
+  return result.rows.reduce((acc, row) => {
+    acc[row.zone] = acc[row.zone] || [];
+    acc[row.zone].push({
+      month: row.month,
+      count: row.count,
+      serious_count: row.serious_count,
+    });
+    return acc;
+  }, {});
+};
+
+export const getHeatmapTimelineBuckets = async ({ zone, crimeType, startDate, endDate }) => {
+  const capabilities = await getSpatialCapabilities();
+  const usePostgis = capabilities.firLocationSpatial;
+  const latExpr = usePostgis
+    ? "ST_Y(location::geometry)"
+    : "(location->>'latitude')::double precision";
+  const lonExpr = usePostgis
+    ? "ST_X(location::geometry)"
+    : "(location->>'longitude')::double precision";
+  const locationFilter = usePostgis
+    ? "location IS NOT NULL"
+    : "location IS NOT NULL AND location ? 'latitude' AND location ? 'longitude'";
+
+  const values = [];
+  let paramIndex = 1;
+  let filters = "";
+  if (zone) {
+    filters += ` AND zone = $${paramIndex++}`;
+    values.push(zone);
+  }
+  if (crimeType) {
+    filters += ` AND crime_type = $${paramIndex++}`;
+    values.push(crimeType);
+  }
+  if (startDate) {
+    filters += ` AND date_time >= $${paramIndex++}`;
+    values.push(startDate);
+  }
+  if (endDate) {
+    filters += ` AND date_time <= $${paramIndex++}`;
+    values.push(endDate);
+  }
+
+  const result = await pool.query(
+    `
+      SELECT
+        to_char(date_trunc('month', date_time), 'YYYY-MM') AS bucket,
+        ${latExpr} AS lat,
+        ${lonExpr} AS lon,
+        COALESCE(severity, 1)::float AS intensity
+      FROM firs
+      WHERE ${locationFilter}
+      ${filters}
+      ORDER BY bucket ASC, date_time ASC;
+    `,
+    values
+  );
+
+  const maxIntensity = Math.max(1, ...result.rows.map((row) => Number(row.intensity) || 1));
+  const buckets = new Map();
+  for (const row of result.rows) {
+    if (!buckets.has(row.bucket)) buckets.set(row.bucket, []);
+    buckets.get(row.bucket).push({
+      lat: Number(row.lat),
+      lon: Number(row.lon),
+      intensity: (Number(row.intensity) || 1) / maxIntensity,
+    });
+  }
+
+  return {
+    buckets: Array.from(buckets.entries()).map(([bucket, heat_points]) => ({
+      bucket,
+      heat_points,
+    })),
+  };
+};
+
+export const getFIRExportRows = async ({ zone, crimeType, status, startDate, endDate }) => {
+  const values = [];
+  let paramIndex = 1;
+  let filters = "";
+  if (zone) {
+    filters += ` AND zone = $${paramIndex++}`;
+    values.push(zone);
+  }
+  if (crimeType) {
+    filters += ` AND crime_type = $${paramIndex++}`;
+    values.push(crimeType);
+  }
+  if (status) {
+    filters += ` AND status = $${paramIndex++}`;
+    values.push(status);
+  }
+  if (startDate) {
+    filters += ` AND date_time >= $${paramIndex++}`;
+    values.push(startDate);
+  }
+  if (endDate) {
+    filters += ` AND date_time <= $${paramIndex++}`;
+    values.push(endDate);
+  }
+
+  const result = await pool.query(
+    `
+      SELECT fir_no, crime_type, section_code, severity, date_time, police_station, zone, status
+      FROM firs
+      WHERE 1=1
+      ${filters}
+      ORDER BY date_time DESC
+      LIMIT 5000;
+    `,
+    values
+  );
   return result.rows;
 };
 

@@ -1,8 +1,8 @@
 import bcrypt from "bcrypt";
 import { findUserByEmail, createUser, findUserById } from "../models/user.model.js";
-import { generateToken } from "../utils/jwt.util.js";
+import { generateRefreshToken, generateToken, verifyRefreshToken } from "../utils/jwt.util.js";
 
-export const signupUser = async ({ name, email, password, role }) => {
+export const signupUser = async ({ name, email, password, role, police_station, zone }) => {
   const existingUser = await findUserByEmail(email);
   if (existingUser) {
     throw new Error("User already exists");
@@ -14,7 +14,9 @@ export const signupUser = async ({ name, email, password, role }) => {
     name,
     email,
     passwordHash,
-    role
+    role,
+    police_station,
+    zone,
   });
 };
 
@@ -31,15 +33,32 @@ export const loginUser = async ({ email, password }) => {
   }
 
   const token = generateToken(user);
+  const refreshToken = generateRefreshToken(user);
 
   return {
     token,
+    refreshToken,
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      policeStation: user.police_station,
+      zone: user.zone,
     }
+  };
+};
+
+export const refreshUserToken = async ({ refreshToken }) => {
+  const decoded = verifyRefreshToken(refreshToken);
+  const user = await findUserById(decoded.id);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return {
+    token: generateToken(user),
+    refreshToken: generateRefreshToken(user),
   };
 };
 

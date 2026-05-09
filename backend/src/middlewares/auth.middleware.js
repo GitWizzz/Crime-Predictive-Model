@@ -18,6 +18,13 @@ export const protect = (req, res, next) => {
   if (token) {
     try {
       const decoded = jwt.verify(token, env.jwtSecret);
+      if (decoded.type === "refresh") {
+        return res.status(401).json({
+          success: false,
+          message: "Refresh token cannot be used as an access token",
+          data: null,
+        });
+      }
       req.user = decoded;
       return next();
     } catch (error) {

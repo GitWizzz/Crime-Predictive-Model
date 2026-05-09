@@ -3,6 +3,7 @@ import {
   fetchPatrolRoutes,
   fetchPatrolRoute,
   buildPatrolSchedule,
+  recordPatrolLog,
 } from "../services/patrol.service.js";
 
 export const generatePatrolHandler = async (req, res) => {
@@ -70,6 +71,23 @@ export const getPatrolScheduleHandler = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
+      success: false,
+      message: error.message,
+      data: null,
+    });
+  }
+};
+
+export const createPatrolLogHandler = async (req, res) => {
+  try {
+    const data = await recordPatrolLog({ payload: req.body, officerId: req.user?.id });
+    return res.status(201).json({
+      success: true,
+      message: "Patrol log recorded",
+      data,
+    });
+  } catch (error) {
+    return res.status(400).json({
       success: false,
       message: error.message,
       data: null,
