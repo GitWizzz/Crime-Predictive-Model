@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const createFIRSchema = z.object({
-  fir_no: z.coerce.string().min(1),
-  crime_type: z.coerce.string().min(1),
+  fir_no: z.string().min(1),
+  crime_type: z.string().min(1),
   section: z.coerce.string().optional(),
   act_type: z.coerce.string().optional(),
   section_code: z.coerce.string().optional(),
@@ -38,10 +38,10 @@ export const bulkFIRSchema = z.union([
 ]);
 
 export const cctnsFIRSchema = z.object({
-  fir_no: z.coerce.string().min(1),
-  crime_type: z.coerce.string().min(1),
-  act_type: z.coerce.string().optional(),
-  sections: z.union([z.coerce.string(), z.array(z.coerce.string())]).optional(),
+  fir_no: z.string().min(1),
+  crime_type: z.string().min(1),
+  act_type: z.string().optional(),
+  sections: z.union([z.string(), z.array(z.string())]).optional(),
   category: z.coerce.string().optional(),
   severity: z.coerce.number().int().min(1).max(5).optional(),
   occurred_at: z.coerce.string().min(1),

@@ -30,8 +30,8 @@ export const createFIR = async ({
     const capabilities = await getSpatialCapabilities();
     const usePostgis = capabilities.firLocationSpatial;
     const locationExpr = usePostgis
-        ? "CASE WHEN $15 IS NULL OR $14 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($15, $14), 4326) END"
-        : "CASE WHEN $15 IS NULL OR $14 IS NULL THEN NULL ELSE jsonb_build_object('lat',$14,'lon',$15) END";
+        ? "CASE WHEN $15::double precision IS NULL OR $14::double precision IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($15::double precision, $14::double precision), 4326) END"
+        : "CASE WHEN $15::double precision IS NULL OR $14::double precision IS NULL THEN NULL ELSE jsonb_build_object('lat',$14::double precision,'lon',$15::double precision) END";
     const lonExpr = usePostgis
         ? "ST_X(location::geometry)"
         : "(location->>'lon')::double precision";
@@ -46,7 +46,7 @@ export const createFIR = async ({
       victim_count, location_name, status, description, source
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      CASE WHEN $11 IS NULL THEN NULL ELSE pgp_sym_encrypt($11, $12) END,
+      CASE WHEN $11::text IS NULL THEN NULL ELSE pgp_sym_encrypt($11::text, $12) END,
       $13, ${locationExpr}, $16, $17, $18, $19, $20, $21, $22)
     RETURNING id, fir_no, crime_type, section, occurred_at, occurred_at AS date_time,
            ${lonExpr} as longitude,
