@@ -46,11 +46,11 @@ export const getZonesWithCounts = async ({ startDate, endDate, type }) => {
 
     let dateFilter = "";
     if (startDate) {
-      dateFilter += ` AND f.date_time >= $${paramIndex++}`;
+      dateFilter += ` AND f.occurred_at >= $${paramIndex++}`;
       values.push(startDate);
     }
     if (endDate) {
-      dateFilter += ` AND f.date_time <= $${paramIndex++}`;
+      dateFilter += ` AND f.occurred_at <= $${paramIndex++}`;
       values.push(endDate);
     }
 
@@ -60,11 +60,12 @@ export const getZonesWithCounts = async ({ startDate, endDate, type }) => {
         z.name,
         z.type,
         z.boundary,
-        CASE WHEN z.type = 'DISTRICT' THEN z.name ELSE NULL END AS district_name,
+        CASE WHEN z.type = 'DISTRICT' THEN z.name ELSE z.district END AS district_name,
         COUNT(f.id)::int AS crime_count
       FROM zones z
       LEFT JOIN firs f
-        ON f.zone = z.name
+        ON (z.type = 'DISTRICT' AND f.zone = z.name)
+        OR (z.type = 'STATION' AND f.police_station = z.name)
         ${dateFilter}
       WHERE 1=1
         ${filter}
@@ -101,11 +102,11 @@ export const getZonesWithCounts = async ({ startDate, endDate, type }) => {
 
   let dateFilter = "";
   if (startDate) {
-    dateFilter += ` AND f.date_time >= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at >= $${paramIndex++}`;
     values.push(startDate);
   }
   if (endDate) {
-    dateFilter += ` AND f.date_time <= $${paramIndex++}`;
+    dateFilter += ` AND f.occurred_at <= $${paramIndex++}`;
     values.push(endDate);
   }
 
