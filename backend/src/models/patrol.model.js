@@ -116,3 +116,40 @@ export const getPatrolRouteById = async (id) => {
 
   return { ...routeRes.rows[0], stops: stopsRes.rows };
 };
+
+export const createPatrolLog = async ({
+  route_id,
+  unit_id,
+  officer_id,
+  started_at,
+  completed_at,
+  coverage_pct,
+  stops_visited,
+  stops_planned,
+  distance_km_actual,
+  incidents_encountered,
+}) => {
+  const result = await pool.query(
+    `INSERT INTO patrol_logs (
+       route_id, unit_id, officer_id, started_at, completed_at, coverage_pct,
+       stops_visited, stops_planned, distance_km_actual, incidents_encountered
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     RETURNING id, route_id, unit_id, officer_id, started_at, completed_at,
+               coverage_pct, stops_visited, stops_planned, distance_km_actual,
+               incidents_encountered, created_at`,
+    [
+      route_id,
+      unit_id || null,
+      officer_id || null,
+      started_at || null,
+      completed_at || null,
+      coverage_pct || null,
+      stops_visited || null,
+      stops_planned || null,
+      distance_km_actual || null,
+      incidents_encountered || 0,
+    ]
+  );
+  return result.rows[0];
+};

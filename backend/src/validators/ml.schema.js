@@ -34,9 +34,13 @@ const seriesPointSchema = z.object({
 });
 
 export const forecastSchema = z.object({
-  series: z.array(seriesPointSchema).min(2),
+  series: z.array(seriesPointSchema).min(2).optional(),
+  time_series: z.array(seriesPointSchema).min(2).optional(),
   periods: z.coerce.number().int().min(1).max(365).default(30),
   freq: z.coerce.string().min(1).default("D"),
+}).refine((data) => data.series || data.time_series, {
+  message: "series or time_series is required",
+  path: ["series"],
 });
 
 export const routeSchema = z.object({

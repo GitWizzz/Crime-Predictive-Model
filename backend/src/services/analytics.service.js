@@ -4,7 +4,11 @@ import {
   getTimeSeriesCounts,
   getBehavioralIncidents,
   getWomenSafetyIncidents,
+  getWomenSafetyFIRs,
   getRiskInputs,
+  getZoneComparison,
+  getHeatmapTimelineBuckets,
+  getFIRExportRows,
 } from "../models/analytics.model.js";
 import { clusterIncidents, forecastSeries, kdeHotspots, riskScore } from "./ml.service.js";
 
@@ -100,7 +104,12 @@ export const runBehavioralClustering = async (filters) => {
 };
 
 export const runWomenSafetyHotspots = async (filters) => {
-  const incidents = await getWomenSafetyIncidents(filters);
+  const normalized = {
+    ...filters,
+    startDate: filters.startDate || filters.fromDate,
+    endDate: filters.endDate || filters.toDate,
+  };
+  const incidents = await getWomenSafetyIncidents(normalized);
   if (!incidents.length) {
     return { heat_points: [] };
   }
@@ -132,6 +141,14 @@ export const runWomenSafetyHotspots = async (filters) => {
   }
 };
 
+export const fetchWomenSafetyFIRs = async (filters) => {
+  return await getWomenSafetyFIRs({
+    ...filters,
+    startDate: filters.startDate || filters.fromDate,
+    endDate: filters.endDate || filters.toDate,
+  });
+};
+
 export const runRiskScoring = async (filters) => {
   const items = await getRiskInputs(filters);
   const payload = {
@@ -159,4 +176,34 @@ export const runRiskScoring = async (filters) => {
     });
     return { items, scores };
   }
+};
+
+export const compareZones = async (filters) => {
+  return await getZoneComparison(filters);
+};
+
+export const buildHeatmapTimeline = async (filters) => {
+  return await getHeatmapTimelineBuckets({
+    ...filters,
+    startDate: filters.startDate || filters.fromDate,
+    endDate: filters.endDate || filters.toDate,
+  });
+};
+
+export const exportFIRsCsv = async (filters) => {
+  const rows = await getFIRExportRows({
+    ...filters,
+    startDate: filters.startDate || filters.fromDate,
+    endDate: filters.endDate || filters.toDate,
+  });
+  const headers = ["fir_no", "crime_type", "section_code", "severity", "date_time", "police_station", "zone", "status"];
+  const escape = (value) => {
+    if (value === null || value === undefined) return "";
+    const text = String(value).replace(/"/g, '""');
+    return `"${text}"`;
+  };
+  return [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => escape(row[header])).join(",")),
+  ].join("\n");
 };

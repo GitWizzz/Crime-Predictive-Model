@@ -1,4 +1,4 @@
-import { getZoneCentroids, createPatrolRoute, listPatrolRoutes, getPatrolRouteById } from "../models/patrol.model.js";
+import { getZoneCentroids, createPatrolRoute, listPatrolRoutes, getPatrolRouteById, createPatrolLog } from "../models/patrol.model.js";
 import { runRiskScoring } from "./analytics.service.js";
 import { optimizeRoutes } from "./ml.service.js";
 
@@ -39,16 +39,19 @@ export const generatePatrolRoute = async ({ type = "DISTRICT", startDate, endDat
   const created = [];
 
   for (const route of optimized.routes) {
-    const orderedStops = route.stop_order.map((index, idx) => {
-      const stop = stops[index + 1];
+    const stopOrder = route.stop_order || route.stops || [];
+    const orderedStops = stopOrder.map((index, idx) => {
+      const stop = stops[index + 1] || stops[index] || stops[idx + 1];
+      if (!stop) return null;
       return {
         sequence: idx + 1,
         latitude: stop.lat,
         longitude: stop.lon,
         zone_name: stop.zone_name,
       };
-    });
-    const routeName = `Route ${route.vehicle_id + 1} (${type})`;
+    }).filter(Boolean);
+    const vehicleId = route.vehicle_id ?? route.vehicle ?? 0;
+    const routeName = `Route ${vehicleId + 1} (${type})`;
     const saved = await createPatrolRoute({
       name: routeName,
       created_by: userId,
@@ -93,4 +96,11 @@ export const buildPatrolSchedule = async ({ type = "DISTRICT", startDate, endDat
     .sort((a, b) => b.score - a.score);
 
   return schedule;
+};
+
+export const recordPatrolLog = async ({ payload, officerId }) => {
+  return await createPatrolLog({
+    ...payload,
+    officer_id: officerId,
+  });
 };

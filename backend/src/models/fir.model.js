@@ -13,18 +13,23 @@ export const createFIR = async ({
     classification_id,
     victim_gender,
     victim_age,
+    victim_count,
     sensitive_notes,
     date_time,
     latitude,
     longitude,
+    location_name,
     police_station,
     zone,
+    status,
+    description,
+    source,
 }) => {
     const capabilities = await getSpatialCapabilities();
     const usePostgis = capabilities.firLocationSpatial;
     const locationExpr = usePostgis
-        ? "ST_SetSRID(ST_MakePoint($15, $14), 4326)"
-        : "jsonb_build_object('type','Point','coordinates',jsonb_build_array($15,$14),'latitude',$14,'longitude',$15)";
+        ? "CASE WHEN $15 IS NULL OR $14 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($15, $14), 4326) END"
+        : "CASE WHEN $15 IS NULL OR $14 IS NULL THEN NULL ELSE jsonb_build_object('type','Point','coordinates',jsonb_build_array($15,$14),'latitude',$14,'longitude',$15) END";
     const lonExpr = usePostgis
         ? "ST_X(location::geometry)"
         : "(location->>'longitude')::double precision";
@@ -35,16 +40,17 @@ export const createFIR = async ({
     const query = `
     INSERT INTO firs (
       fir_no, crime_type, section, act_type, section_code, severity, category, classification_id,
-      victim_gender, victim_age, sensitive_notes_enc, date_time, location, police_station, zone
+      victim_gender, victim_age, sensitive_notes_enc, date_time, location, police_station, zone,
+      victim_count, location_name, status, description, source
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
       CASE WHEN $11 IS NULL THEN NULL ELSE pgp_sym_encrypt($11, $12) END,
-      $13, ${locationExpr}, $16, $17)
-    RETURNING id, fir_no, crime_type, section, date_time,
+      $13, ${locationExpr}, $16, $17, $18, $19, $20, $21, $22)
+    RETURNING id, fir_no, crime_type, section, date_time, date_time AS occurred_at,
            ${lonExpr} as longitude,
            ${latExpr} as latitude,
            police_station, zone, act_type, section_code, severity, category, classification_id,
-           victim_gender, victim_age;
+           victim_gender, victim_age, victim_count, location_name, status, description, source;
   `;
     const values = [
         fir_no,
@@ -64,6 +70,11 @@ export const createFIR = async ({
         longitude,
         police_station,
         zone,
+        victim_count || 1,
+        location_name || null,
+        status || "PENDING",
+        description || null,
+        source || "MANUAL",
     ];
 
     const result = await pool.query(query, values);
@@ -81,10 +92,11 @@ export const getFIRById = async (id) => {
         : "(location->>'latitude')::double precision";
     const query = `
     SELECT id, fir_no, crime_type, section, act_type, section_code, severity, category,
-           classification_id, victim_gender, victim_age, date_time,
+           classification_id, victim_gender, victim_age, victim_count, date_time,
+           date_time AS occurred_at,
            ${lonExpr} as longitude,
            ${latExpr} as latitude,
-           police_station, zone
+           police_station, zone, location_name, status, description, source
     FROM firs
     WHERE id = $1;
   `;
@@ -100,6 +112,7 @@ export const getFIRs = async ({
     endDate,
     zone,
     police_station,
+    status,
     page = 1,
     limit = 50,
 }) => {
@@ -117,10 +130,11 @@ export const getFIRs = async ({
 
     let query = `
     SELECT id, fir_no, crime_type, section, act_type, section_code, severity, category,
-           classification_id, victim_gender, victim_age, date_time,
+           classification_id, victim_gender, victim_age, victim_count, date_time,
+           date_time AS occurred_at,
            ${lonExpr} as longitude,
            ${latExpr} as latitude,
-           police_station, zone,
+           police_station, zone, location_name, status, description, source,
            COUNT(*) OVER() as total_count
     FROM firs
     WHERE 1=1
@@ -163,6 +177,11 @@ export const getFIRs = async ({
         values.push(police_station);
     }
 
+    if (status) {
+        query += ` AND status = $${paramIndex++}`;
+        values.push(status);
+    }
+
     query += ` ORDER BY date_time DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
 
     values.push(safeLimit, offset);
@@ -172,9 +191,11 @@ export const getFIRs = async ({
 
     return {
         items: result.rows.map(({ total_count, ...rest }) => rest),
+        firs: result.rows.map(({ total_count, ...rest }) => rest),
         total,
         page: safePage,
         limit: safeLimit,
+        total_pages: Math.ceil(total / safeLimit),
     };
 };
 
@@ -187,7 +208,7 @@ export const createFIRsBulk = async (items) => {
     const usePostgis = capabilities.firLocationSpatial;
     const values = [];
     const placeholders = items.map((item, index) => {
-        const baseIndex = index * 15;
+        const baseIndex = index * 20;
         values.push(
             item.fir_no,
             item.crime_type,
@@ -200,17 +221,22 @@ export const createFIRsBulk = async (items) => {
             item.victim_gender || null,
             item.victim_age || null,
             item.date_time,
-            item.latitude,
-            item.longitude,
+            item.latitude ?? null,
+            item.longitude ?? null,
             item.police_station || null,
-            item.zone || null
+            item.zone || null,
+            item.victim_count || 1,
+            item.location_name || null,
+            item.status || "PENDING",
+            item.description || null,
+            item.source || "BULK_IMPORT"
         );
 
         const locationExpr = usePostgis
-            ? `ST_SetSRID(ST_MakePoint($${baseIndex + 13}, $${baseIndex + 12}), 4326)`
-            : `jsonb_build_object('type','Point','coordinates',jsonb_build_array($${baseIndex + 13},$${baseIndex + 12}),'latitude',$${baseIndex + 12},'longitude',$${baseIndex + 13})`;
+            ? `CASE WHEN $${baseIndex + 13} IS NULL OR $${baseIndex + 12} IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($${baseIndex + 13}, $${baseIndex + 12}), 4326) END`
+            : `CASE WHEN $${baseIndex + 13} IS NULL OR $${baseIndex + 12} IS NULL THEN NULL ELSE jsonb_build_object('type','Point','coordinates',jsonb_build_array($${baseIndex + 13},$${baseIndex + 12}),'latitude',$${baseIndex + 12},'longitude',$${baseIndex + 13}) END`;
 
-        return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, ${locationExpr}, $${baseIndex + 14}, $${baseIndex + 15})`;
+        return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, ${locationExpr}, $${baseIndex + 14}, $${baseIndex + 15}, $${baseIndex + 16}, $${baseIndex + 17}, $${baseIndex + 18}, $${baseIndex + 19}, $${baseIndex + 20})`;
     });
 
     const lonExpr = usePostgis
@@ -223,17 +249,82 @@ export const createFIRsBulk = async (items) => {
     const query = `
     INSERT INTO firs (
       fir_no, crime_type, section, act_type, section_code, severity, category, classification_id,
-      victim_gender, victim_age, date_time, location, police_station, zone
+      victim_gender, victim_age, date_time, location, police_station, zone,
+      victim_count, location_name, status, description, source
     )
     VALUES ${placeholders.join(", ")}
     ON CONFLICT (fir_no) DO NOTHING
     RETURNING id, fir_no, crime_type, section, act_type, section_code, severity, category,
-              classification_id, victim_gender, victim_age, date_time,
+              classification_id, victim_gender, victim_age, victim_count, date_time, date_time AS occurred_at,
               ${lonExpr} as longitude,
               ${latExpr} as latitude,
-              police_station, zone;
+              police_station, zone, location_name, status, description, source;
   `;
 
     const result = await pool.query(query, values);
     return result.rows;
+};
+
+export const searchFIRRecords = async ({ q, zone, page = 1, limit = 50 }) => {
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+    const safePage = Math.max(parseInt(page, 10) || 1, 1);
+    const offset = (safePage - 1) * safeLimit;
+    const capabilities = await getSpatialCapabilities();
+    const usePostgis = capabilities.firLocationSpatial;
+    const lonExpr = usePostgis
+        ? "ST_X(location::geometry)"
+        : "(location->>'longitude')::double precision";
+    const latExpr = usePostgis
+        ? "ST_Y(location::geometry)"
+        : "(location->>'latitude')::double precision";
+
+    const values = [`%${q}%`];
+    let paramIndex = 2;
+    let zoneFilter = "";
+    if (zone) {
+        zoneFilter = ` AND zone = $${paramIndex++}`;
+        values.push(zone);
+    }
+
+    const query = `
+      SELECT id, fir_no, crime_type, section, act_type, section_code, severity, category,
+             classification_id, victim_gender, victim_age, victim_count, date_time,
+             date_time AS occurred_at,
+             ${lonExpr} as longitude,
+             ${latExpr} as latitude,
+             police_station, zone, location_name, status, description, source,
+             CASE
+               WHEN lower(fir_no) = lower($1) THEN 1.0
+               WHEN lower(crime_type) LIKE lower($1) THEN 0.8
+               ELSE 0.5
+             END AS relevance,
+             COUNT(*) OVER() as total_count
+      FROM firs
+      WHERE (
+        fir_no ILIKE $1
+        OR crime_type ILIKE $1
+        OR COALESCE(section, '') ILIKE $1
+        OR COALESCE(section_code, '') ILIKE $1
+        OR COALESCE(location_name, '') ILIKE $1
+        OR COALESCE(description, '') ILIKE $1
+        OR COALESCE(police_station, '') ILIKE $1
+        OR COALESCE(zone, '') ILIKE $1
+      )
+      ${zoneFilter}
+      ORDER BY relevance DESC, date_time DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++};
+    `;
+
+    values.push(safeLimit, offset);
+    const result = await pool.query(query, values);
+    const total = result.rows[0]?.total_count ? parseInt(result.rows[0].total_count, 10) : 0;
+    const items = result.rows.map(({ total_count, ...rest }) => rest);
+    return {
+        items,
+        firs: items,
+        total,
+        page: safePage,
+        limit: safeLimit,
+        total_pages: Math.ceil(total / safeLimit),
+    };
 };

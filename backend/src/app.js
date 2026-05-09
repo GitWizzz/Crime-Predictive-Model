@@ -15,6 +15,11 @@ import analyticsRoutes from "./routes/analytics.routes.js";
 import iradRoutes from "./routes/irad.routes.js";
 import patrolRoutes from "./routes/patrol.routes.js";
 import eventsRoutes from "./routes/events.routes.js";
+import userRoutes from "./routes/user.routes.js";
+import dashboardRoutes from "./routes/dashboard.routes.js";
+import alertRoutes from "./routes/alert.routes.js";
+import auditRoutes from "./routes/audit.routes.js";
+import geoFenceRoutes from "./routes/geoFence.routes.js";
 
 
 const app = express();
@@ -31,17 +36,28 @@ app.use(
 );
 app.use(auditMiddleware);
 
-app.use("/api/health", healthRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/fir", firRoutes);
-app.use("/api/hotspots", hotspotRoutes);
-app.use("/api/ml", mlRoutes);
-app.use("/api/zones", zoneRoutes);
-app.use("/api/classifications", classificationRoutes);
-app.use("/api/analytics", analyticsRoutes);
-app.use("/api/irad", iradRoutes);
-app.use("/api/patrol", patrolRoutes);
-app.use("/api/events", eventsRoutes);
+const mountApiRoutes = (prefix) => {
+  app.use(`${prefix}/health`, healthRoutes);
+  app.use(`${prefix}/auth`, authRoutes);
+  app.use(`${prefix}/fir`, firRoutes);
+  app.use(`${prefix}/firs`, firRoutes);
+  app.use(`${prefix}/hotspots`, hotspotRoutes);
+  app.use(`${prefix}/ml`, mlRoutes);
+  app.use(`${prefix}/zones`, zoneRoutes);
+  app.use(`${prefix}/classifications`, classificationRoutes);
+  app.use(`${prefix}/analytics`, analyticsRoutes);
+  app.use(`${prefix}/irad`, iradRoutes);
+  app.use(`${prefix}/patrol`, patrolRoutes);
+  app.use(`${prefix}/events`, eventsRoutes);
+  app.use(`${prefix}/users`, userRoutes);
+  app.use(`${prefix}/dashboard`, dashboardRoutes);
+  app.use(`${prefix}/alerts`, alertRoutes);
+  app.use(`${prefix}/audit`, auditRoutes);
+  app.use(`${prefix}/geo-fences`, geoFenceRoutes);
+};
+
+mountApiRoutes("/api/v1");
+mountApiRoutes("/api");
 
 app.use(errorHandler);
 
