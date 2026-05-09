@@ -1,6 +1,6 @@
 # System Architecture
 **Crime Predictive Hotspot Mapping System**  
-Last updated: 2026-04-20
+Last updated: 2026-05-09
 
 ---
 
@@ -73,20 +73,33 @@ A three-tier microservices system built for crime analysis and hotspot predictio
 - **State:** React local state + URL query params for filter persistence
 - **Real-time:** EventSource (SSE) for live FIR alerts and crime spike notifications
 
-**Key pages:**
-| Route | Purpose |
-|---|---|
-| `/` | Landing page |
-| `/login` | Auth |
-| `/dashboard` | Stats overview (9 metric cards) |
-| `/dashboard/hotspots` | Interactive map with DBSCAN clusters + KDE heatmap |
-| `/dashboard/firs` | FIR table with filters, search, bulk import |
-| `/dashboard/analytics` | Forecasts, seasonal trends, risk scores, zone comparison |
-| `/dashboard/behavioral` | Behavioral clustering visualization |
-| `/dashboard/irad` | Road accident hotspot map |
-| `/dashboard/patrols` | Patrol route generation and management |
-| `/dashboard/reports` | Export and report generation |
-| `/dashboard/women-safety` | Women safety KDE layer |
+**Key pages (13 dashboard routes + 3 public):**
+| Route | Purpose | Status |
+|---|---|---|
+| `/landing_page` | Hero landing with stat preview + auth portal | ✅ Implemented |
+| `/login` | JWT auth | ✅ Implemented |
+| `/signup` | Account registration | ✅ Implemented |
+| `/dashboard` | Overview: 9 KPI cards, map preview, recent FIRs, system health | ✅ Implemented |
+| `/dashboard/hotspots` | DBSCAN clusters + KDE heatmap, women safety overlay, IRAD layer, district shading, Top-N charts | ✅ Implemented |
+| `/dashboard/firs` | FIR table (7 filters, bulk JSON import, CSV export, 10+ field form, pagination) | ✅ Implemented |
+| `/dashboard/analytics` | 7 tabs: Forecasts, Seasonal, Behavioral, Risk Scores, Zone Compare, Women Safety, Anomalies | ✅ Implemented |
+| `/dashboard/behavioral` | Cluster count cards, incident pattern table with tags, date-range filter | ✅ Minimal |
+| `/dashboard/patrols` | Route generation (DISTRICT/STATION, 1–N vehicles), Leaflet preview, saved routes | ✅ Implemented |
+| `/dashboard/irad` | JSON upload, KDE accident heatmap, accident records table | ✅ Implemented |
+| `/dashboard/reports` | Configurable forecast (7–60 days), actual vs forecast chart, downloadable tables | ✅ Implemented |
+| `/dashboard/women-safety` | Women safety intelligence layer (KDE + FIR classification) | ⚠️ Stub |
+| `/dashboard/geo-fences` | Boundary zone monitoring and alert configuration | ⚠️ Stub |
+| `/dashboard/users` | User management (ADMIN role only) | ⚠️ Stub |
+| `/dashboard/audit-log` | Audit history of all API operations | ⚠️ Stub |
+| `/dashboard/settings` | System preferences and configuration | ⚠️ Stub |
+
+**Topbar features (as of 2026-05-09):**
+- Breadcrumb navigation: `Station · Page eyebrow → Page title`
+- Theme toggle (dark ↔ light, persisted in localStorage)
+- "Brief" button (AI summary action)
+- "Register FIR" primary CTA (quick FIR intake)
+- Bell notifications icon
+- Logout button
 
 ---
 

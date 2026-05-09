@@ -67,7 +67,7 @@ export default function Sidebar() {
           </div>
           <div>
             <p className="text-sm font-semibold tracking-[-0.01em] text-[var(--fg-primary)]">
-              CrimeIntel
+              CrimeIntel  
             </p>
             <p className="text-xs text-[var(--fg-tertiary)]">Crime Intelligence</p>
           </div>

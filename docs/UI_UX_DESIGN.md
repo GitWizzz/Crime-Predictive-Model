@@ -1,6 +1,6 @@
 # UI/UX & Frontend Design System
 **Crime Predictive Hotspot Mapping System**
-Last updated: 2026-05-08
+Last updated: 2026-05-09
 Document type: AI-design-tool-ready specification (Claude Design / Stitch / v0 / Figma Make compatible)
 
 ---
@@ -162,31 +162,63 @@ Visually separate operational from analytical with a 1px divider in the sidebar.
 ### Right-rail context panel (drawer, 360px wide, slides in)
 Used for *contextual detail* — clicking a hotspot, a FIR row, a unit on the map opens this panel without leaving the parent screen. **Reduces page navigation by ~40% in expected workflows.**
 
-### URL structure
+### URL structure (implemented routes as of 2026-05-09)
 
 ```
-/                           landing
-/login
-/dashboard
+/landing_page                       Hero landing + auth portal
+/login                              JWT authentication
+/signup                             Account registration
+
+/dashboard                          Overview: 9 KPIs, map preview, recent FIRs, health
+/dashboard/hotspots                 DBSCAN + KDE map, women safety / IRAD overlays
 /dashboard/hotspots?zone=patna&from=2026-01-01&to=2026-04-30
+/dashboard/firs                     FIR table with 7 filters, bulk import, CSV export
 /dashboard/firs?status=open&q=theft
-/dashboard/firs/new
-/dashboard/firs/:id
-/dashboard/analytics
-/dashboard/analytics/forecast?zone=patna
-/dashboard/analytics/compare?zones=patna,gaya
-/dashboard/patrol
-/dashboard/patrol/routes/:id
-/dashboard/irad
-/dashboard/women-safety
-/dashboard/geo-fences
-/dashboard/reports
-/admin/users
-/admin/audit
-/settings
+/dashboard/analytics                7-tab analytics hub
+/dashboard/behavioral               Behavioral clustering (date-filter, incident table)
+/dashboard/patrols                  Patrol route generation + saved routes
+/dashboard/irad                     IRAD accident heatmap + records
+/dashboard/reports                  Configurable Prophet forecast + download
+/dashboard/women-safety             Women safety layer (KDE + FIR classification)
+/dashboard/geo-fences               Boundary zone monitoring (stub)
+/dashboard/users                    User management — ADMIN only (stub)
+/dashboard/audit-log                API action audit log (stub)
+/dashboard/settings                 System preferences (stub)
 ```
 
 **Filters live in the URL, not in component state.** Every meaningful filter combo must be a shareable, bookmarkable URL.
+
+### Analytics page — 7 tabs (implemented)
+
+| Tab | Content |
+|-----|---------|
+| **Forecasts** | 30-day Prophet forecast chart (actual + forecast + 80% CI), MAE/trend accuracy metrics, Forecast vs Actual table |
+| **Seasonal** | Crime count by day-of-week, month, hour breakdown |
+| **Behavioral** | 2D scatter of behavioral clusters (A/B/C), PCA-reduced from ML service |
+| **Risk Scores** | Top 8 zones by 0–100 risk score, SHAP feature importance drivers |
+| **Zone Compare** | Side-by-side district comparison charts |
+| **Women Safety** | Women-safety KDE signal data and trends |
+| **Anomalies** | Detected spikes, Isolation Forest flags, anomaly timeline |
+
+### Topbar — implemented features (2026-05-09)
+
+```
+[Patna Central > page-eyebrow]    [date-range pill] [Brief btn] [Theme toggle] [🔔] [Register FIR CTA] [Logout]
+Page Title (26px, semibold)
+```
+
+- **Breadcrumb:** Station name (`Patna Central`) → eyebrow label (e.g. `Spatial intelligence`)
+- **Theme toggle:** Switches `[data-theme]` attribute between `dark` and `light`; persisted in `localStorage`; shows Sun/Moon icon with label
+- **Brief:** Placeholder for AI-generated situation summary
+- **Register FIR:** Primary blue CTA, opens FIR intake flow
+- **Bell:** Notification icon (SSE-driven)
+- **Logout:** Red-toned button, clears `authToken`/`authUser`, redirects to `/landing_page`
+
+### Landing page — implemented design (2026-05-09)
+
+Two-column layout with hero-grid dot background and ambient orb gradients:
+- **Left column:** Bihar Police badge + branding, headline "Crime control that starts with the map, not the spreadsheet", description, primary/secondary CTAs, 3 stat-preview cards (Active hotspots: 127, Stations covered: 42, Forecast confidence: 80%)
+- **Right column:** "Spatial intelligence overview" card with simulated hotspot map preview (colored circles representing DBSCAN clusters), live preview banner, patrol & alert info strips
 
 ---
 

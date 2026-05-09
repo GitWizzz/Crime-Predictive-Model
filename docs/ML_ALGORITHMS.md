@@ -1,23 +1,34 @@
 # ML Algorithms Reference
 **Crime Predictive Hotspot Mapping System**  
-Last updated: 2026-04-20
+Last updated: 2026-05-09
 
 ---
 
 ## Overview
 
-The ML service (`ml-service/`) implements seven distinct algorithms. Each is purpose-built for a specific aspect of crime analysis. This document explains what each algorithm does, how it is configured, how to tune it, and how to interpret its output.
+The ML service (`ml-service/`) implements twelve distinct algorithms. Each is purpose-built for a specific aspect of crime analysis. This document explains what each algorithm does, how it is configured, how to tune it, and how to interpret its output.
 
-| Algorithm | File | Purpose |
-|---|---|---|
-| DBSCAN | `services/clustering.py` | Spatial crime cluster detection |
-| KDE | `services/hotspots.py` | Density heatmap generation |
-| Prophet | `services/forecast.py` | Time-series crime forecasting |
-| OR-Tools VRP | `services/routing.py` | Patrol route optimization |
-| Random Forest | `services/classification.py` | Crime category prediction |
-| Ridge Regression | `services/risk.py` | Zone risk scoring |
-| Moran's I | `services/spatial_stats.py` | Spatial autocorrelation test |
-| PAI | `services/evaluation.py` | Hotspot accuracy evaluation |
+| Algorithm | File | Status | Purpose |
+|---|---|---|---|
+| DBSCAN | `services/clustering.py` | ✅ Implemented | Spatial crime cluster detection |
+| KDE | `services/hotspots.py` | ✅ Implemented | Density heatmap generation (standard + severity-weighted women safety) |
+| Prophet | `services/forecast.py` | ✅ Implemented | Time-series crime forecasting (30-day, 80% CI) |
+| OR-Tools VRP | `services/routing.py` | ✅ Implemented | Patrol route optimization |
+| Ridge Regression | `services/risk.py` | ✅ Implemented | Zone risk scoring (0–100) |
+| SHAP | `services/risk.py` | ✅ Implemented | Risk score explainability (feature contributions) |
+| Random Forest | `services/classification.py` | ✅ Implemented | Crime category prediction (4 classes) |
+| Isolation Forest | `services/anomaly.py` | ✅ Implemented | Crime spike anomaly detection |
+| Moran's I | `services/spatial_stats.py` | ✅ Implemented | Spatial autocorrelation significance test |
+| PAI | `services/evaluation.py` | ✅ Implemented | Hotspot prediction accuracy index |
+| Knox Test (Near-Repeat) | `services/near_repeat.py` | ✅ Implemented | Near-repeat victimization risk scoring |
+| spaCy NER | `services/nlp.py` | ✅ Implemented | Named entity extraction from FIR text |
+
+**Frontend surfaces consuming ML output:**
+- Hotspot Map page → DBSCAN clusters + KDE heatmap + women safety weighted KDE
+- Analytics page (7 tabs) → Prophet forecasts, SHAP risk scores, Isolation Forest anomalies, behavioral clusters
+- Patrol page → OR-Tools VRP routes
+- Reports page → Prophet forecast with configurable horizon (7–60 days)
+- Dashboard overview → Risk summary, active hotspot count, system health
 | SHAP | `services/risk.py` | Risk score explainability |
 | Isolation Forest | `services/anomaly.py` | Crime spike detection |
 | Knox / Near-repeat | `services/near_repeat.py` | Near-repeat victimization |

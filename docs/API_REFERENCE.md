@@ -1,7 +1,7 @@
 # API Reference
 **Crime Predictive Hotspot Mapping System**  
 Base URL: `http://localhost:4000/api/v1`  
-Last updated: 2026-04-20
+Last updated: 2026-05-09
 
 ---
 
@@ -1259,6 +1259,307 @@ Check health of all system components.
     "ml_service": { "status": "ok" }
   }
 }
+```
+
+---
+
+## Women Safety Endpoints — `/api/v1/analytics/women-safety`
+
+---
+
+### GET `/api/v1/analytics/women-safety`
+Fetch severity-weighted KDE heatmap data for women safety crimes.
+
+**Auth required:** Yes
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `zone` | string | all | Filter by district or station |
+| `fromDate` | ISO date | -30d | Start date |
+| `toDate` | ISO date | today | End date |
+| `bandwidth_meters` | integer | 500 | KDE bandwidth |
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "heat_points": [
+      { "lat": 25.601, "lon": 85.142, "intensity": 0.87 },
+      { "lat": 25.612, "lon": 85.155, "intensity": 0.54 }
+    ],
+    "total_incidents": 142,
+    "top_zones": [
+      { "name": "Patna Central", "count": 34, "risk_level": "high" }
+    ]
+  }
+}
+```
+
+---
+
+### GET `/api/v1/analytics/women-safety/firs`
+List FIRs classified as women-safety crimes.
+
+**Auth required:** Yes
+
+**Query parameters:** `zone`, `fromDate`, `toDate`, `status`, `page`, `limit`
+
+---
+
+## Users Endpoints — `/api/v1/users`
+
+**Auth required for all:** `ADMIN` only
+
+---
+
+### GET `/api/v1/users`
+List all users with optional filters.
+
+**Query parameters:** `role`, `page`, `limit`
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "users": [
+      { "id": 1, "name": "Rajesh Kumar", "email": "rajesh@bihar.gov.in", "role": "OFFICER", "created_at": "2025-01-10T..." }
+    ],
+    "pagination": { "page": 1, "limit": 25, "total": 84 }
+  }
+}
+```
+
+---
+
+### PATCH `/api/v1/users/:id`
+Update user role or status.
+
+**Request body:**
+```json
+{ "role": "ANALYST", "is_active": true }
+```
+
+---
+
+### DELETE `/api/v1/users/:id`
+Deactivate (soft-delete) a user account.
+
+---
+
+### POST `/api/v1/users/:id/reset-password`
+Admin-initiated password reset for a user. Sends reset email.
+
+---
+
+## Audit Log Endpoints — `/api/v1/audit`
+
+**Auth required:** `ADMIN` only
+
+---
+
+### GET `/api/v1/audit`
+List audit log entries for all API actions.
+
+**Query parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `userId` | integer | Filter by user |
+| `action` | string | e.g. `FIR_CREATE`, `LOGIN`, `ROUTE_GENERATE` |
+| `fromDate` | ISO date | Start date |
+| `toDate` | ISO date | End date |
+| `page` | integer | Pagination (default 1) |
+| `limit` | integer | Per page (default 50, max 200) |
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "entries": [
+      {
+        "id": 1001,
+        "user_id": 5,
+        "user_name": "Rajesh Kumar",
+        "action": "FIR_CREATE",
+        "resource": "firs",
+        "resource_id": "FIR-2026-05-09-001",
+        "ip": "192.168.1.10",
+        "created_at": "2026-05-09T10:30:00Z"
+      }
+    ],
+    "pagination": { "page": 1, "limit": 50, "total": 2341 }
+  }
+}
+```
+
+**Audited actions:**
+`LOGIN`, `LOGOUT`, `FIR_CREATE`, `FIR_UPDATE`, `FIR_DELETE`, `FIR_BULK_IMPORT`,
+`ROUTE_GENERATE`, `HOTSPOT_CLUSTER`, `USER_CREATE`, `USER_UPDATE`, `USER_DELETE`,
+`GEO_FENCE_CREATE`, `GEO_FENCE_DELETE`, `EXPORT_CSV`, `ML_TRAIN`
+
+---
+
+## Mobile-Specific Endpoints
+
+These endpoints are required by the mobile app and are either new additions or clarified here for mobile context.
+
+---
+
+### GET `/api/v1/users/me`
+Get the authenticated user's own profile (any role).
+
+**Auth required:** Yes
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 5,
+    "name": "Rajesh Kumar",
+    "email": "rajesh@bihar.gov.in",
+    "role": "OFFICER",
+    "policeStation": "Patna Sadar",
+    "zone": "Patna",
+    "createdAt": "2025-01-10T08:00:00Z"
+  }
+}
+```
+
+Used by the mobile app immediately after login to populate local user state and determine role-based navigation.
+
+---
+
+### PATCH `/api/v1/users/me/fcm-token`
+Register or refresh the device's FCM push token. Called on app start and when FCM issues a new token.
+
+**Auth required:** Yes
+
+**Request body:**
+```json
+{ "fcmToken": "fGxyz...APA91b" }
+```
+
+**Response 200:**
+```json
+{ "success": true, "data": { "message": "FCM token updated" } }
+```
+
+The backend stores the token on the `users` row and uses it to send targeted push notifications via Firebase Admin SDK.
+
+---
+
+### GET `/api/v1/dashboard/summary`
+Aggregated KPI payload optimized for the mobile Dashboard screen. Returns all top-level numbers in a single call to minimize round trips on mobile networks.
+
+**Auth required:** Yes
+
+**Query parameters:** `zone` (default: user's assigned zone)
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "activeHotspots": 127,
+    "stationsCovered": 42,
+    "forecastConfidence": 80,
+    "pendingFirs": 31,
+    "firsLast24h": 14,
+    "firsLast7d": 87,
+    "highRiskZones": ["Patna Central", "Muzaffarpur North"],
+    "topCrimeType": "Theft",
+    "generatedAt": "2026-05-09T10:30:00Z"
+  }
+}
+```
+
+---
+
+### GET `/api/v1/alerts`
+List recent crime spike alerts for the mobile Alerts screen. Alerts are generated by the anomaly detection pipeline.
+
+**Auth required:** Yes
+
+**Query parameters:**
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `zone` | string | user zone | Filter by zone |
+| `severity` | string | — | `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
+| `unreadOnly` | boolean | false | Return only unread alerts |
+| `page` | integer | 1 | — |
+| `limit` | integer | 20 | Max 100 |
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "alerts": [
+      {
+        "id": "a1b2c3d4",
+        "zone": "Patna Central",
+        "crimeType": "Robbery",
+        "count": 134,
+        "zScore": 4.2,
+        "severity": "CRITICAL",
+        "message": "Crime spike detected in Patna Central — 134 incidents (z-score 4.2)",
+        "isRead": false,
+        "receivedAt": "2026-05-09T09:15:00Z"
+      }
+    ],
+    "unreadCount": 3,
+    "pagination": { "page": 1, "limit": 20, "total": 7 }
+  }
+}
+```
+
+---
+
+### GET `/api/v1/alerts/:id`
+Fetch a single alert by ID and mark it as read.
+
+**Auth required:** Yes
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "a1b2c3d4",
+    "zone": "Patna Central",
+    "crimeType": "Robbery",
+    "count": 134,
+    "zScore": 4.2,
+    "severity": "CRITICAL",
+    "message": "Crime spike detected in Patna Central — 134 incidents (z-score 4.2)",
+    "anomalyDetails": {
+      "expected": 18.3,
+      "actual": 134,
+      "stdDev": 28.1,
+      "windowDays": 7
+    },
+    "isRead": true,
+    "receivedAt": "2026-05-09T09:15:00Z"
+  }
+}
+```
+
+---
+
+### PATCH `/api/v1/alerts/:id/read`
+Explicitly mark a single alert as read without fetching its full detail.
+
+**Auth required:** Yes
+
+**Response 200:**
+```json
+{ "success": true, "data": { "message": "Alert marked as read" } }
 ```
 
 ---
