@@ -10,8 +10,11 @@ import {
   Flame,
   Layers3,
   MapPinned,
+  Maximize2,
+  Minimize2,
   RefreshCcw,
   Siren,
+  X,
 } from "lucide-react";
 import { fetchFIRs, fetchHotspots, fetchKDEHotspots } from "@/services/hotspots";
 import { fetchZones } from "@/services/zones";
@@ -179,6 +182,8 @@ export default function HotspotsPage() {
   const [accidentHeatPoints, setAccidentHeatPoints] = useState<HeatPoint[]>([]);
   const [showDistrictShading, setShowDistrictShading] = useState(true);
   const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
+  const [firPins, setFirPins] = useState<{ id: number; lat: number; lon: number; crimeType: string; location?: string }[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const downloadCsv = (filename: string, rows: Array<Record<string, string | number | null | undefined>>) => {
@@ -247,6 +252,26 @@ export default function HotspotsPage() {
     loadZones();
   }, [loadZones]);
 
+  useEffect(() => {
+    if (!token) return;
+    fetchFIRs(token)
+      .then((res) => {
+        const items = (res.data?.items || []) as FIRIncident[];
+        setFirPins(
+          items
+            .filter((f) => Number.isFinite(f.latitude) && Number.isFinite(f.longitude))
+            .map((f) => ({
+              id: f.id,
+              lat: f.latitude,
+              lon: f.longitude,
+              crimeType: f.crime_type || "Unknown",
+              dateTime: f.date_time,
+            }))
+        );
+      })
+      .catch(() => {});
+  }, [token]);
+
   const stationDistrictOptions = Array.from(
     new Set(
       stationTotals
@@ -297,7 +322,7 @@ export default function HotspotsPage() {
     setSelectedHotspotId((current) =>
       current && nextHotspots.some((item: Hotspot) => item.clusterId === current)
         ? current
-        : nextHotspots[0]?.clusterId || null
+        : null
     );
   }, [token]);
 
@@ -420,7 +445,7 @@ export default function HotspotsPage() {
   }, [token, loadData, loadZones]);
 
   const selectedHotspot =
-    hotspots.find((hotspot) => hotspot.clusterId === selectedHotspotId) || hotspots[0] || null;
+    hotspots.find((hotspot) => hotspot.clusterId === selectedHotspotId) || null;
   const totalVisibleIncidents = hotspots.reduce((sum, hotspot) => sum + hotspot.crimeCount, 0);
   const hotspotCount = hotspots.length;
 
@@ -487,15 +512,15 @@ export default function HotspotsPage() {
           ))}
           <div className="flex flex-wrap gap-2 md:col-span-3 xl:col-span-1 xl:justify-end">
             {[
-              { label: "Women safety", active: showWomenSafety, onClick: () => setShowWomenSafety((value) => !value) },
-              { label: "IRAD accidents", active: showAccidents, onClick: () => setShowAccidents((value) => !value) },
-              { label: "District shading", active: showDistrictShading, onClick: () => setShowDistrictShading((value) => !value) },
+              { label: "Women safety heat", active: showWomenSafety, onClick: () => setShowWomenSafety((v) => !v), title: "Overlay heatmap of women-safety incidents (eve teasing, assault, rape)" },
+              { label: "District shading", active: showDistrictShading, onClick: () => setShowDistrictShading((v) => !v), title: "Colour-fill districts by crime density" },
             ].map((item) => (
               <button
                 key={item.label}
+                title={item.title}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                   item.active
-                    ? "bg-[var(--accent-50)] text-[var(--accent-700)]"
+                    ? "bg-[var(--accent-50)] text-[var(--accent-700)] ring-1 ring-[var(--accent-500)]"
                     : "border bg-[var(--bg-surface)] text-[var(--fg-secondary)]"
                 }`}
                 onClick={item.onClick}
@@ -549,6 +574,13 @@ export default function HotspotsPage() {
                   }
                   className="rounded-2xl border bg-[var(--bg-surface)] px-3 py-2"
                 />
+                <button
+                  onClick={() => setIsFullscreen(true)}
+                  className="inline-flex items-center gap-2 rounded-2xl border bg-[var(--bg-surface)] px-3 py-2 text-sm font-medium text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)] transition"
+                  title="Fullscreen map"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
 
@@ -564,8 +596,10 @@ export default function HotspotsPage() {
               showDistrictShading={showDistrictShading}
               selectedHotspotId={selectedHotspotId}
               onSelectHotspot={setSelectedHotspotId}
+              onModeChange={setMode}
+              firIncidents={firPins}
             />
-            <Drawer open={!!selectedHotspot} onClose={() => setSelectedHotspotId(null)} width="w-80">
+            <Drawer open={!!selectedHotspot} onClose={() => setSelectedHotspotId(null)} width="w-80" backdrop={false}>
               <HotspotDetail
                 hotspot={selectedHotspot}
                 fmt={fmt}
@@ -680,15 +714,12 @@ export default function HotspotsPage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
+        {/* Station-wise crime totals */}
         <div className="surface-card rounded-[28px] p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
-                Station-wise crime totals
-              </h3>
-              <p className="mt-1 text-sm text-[var(--fg-secondary)]">
-                Compact preview with a CSV download for the full station list.
-              </p>
+              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">Station-wise crime totals</h3>
+              <p className="mt-1 text-sm text-[var(--fg-secondary)]">Compact preview with a CSV download for the full station list.</p>
             </div>
             <button
               type="button"
@@ -699,51 +730,49 @@ export default function HotspotsPage() {
               View data
             </button>
           </div>
+
           <div className="mt-4 overflow-hidden rounded-[22px] border min-h-[320px]">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-[var(--bg-surface)] text-xs uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
-                <tr>
-                  <th className="px-3 py-3">District</th>
-                  <th className="px-3 py-3">Station</th>
-                  <th className="px-3 py-3">Crimes</th>
-                  <th className="px-3 py-3">Dominant crime</th>
-                  <th className="px-3 py-3">Category</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topStationPreview.length === 0 ? (
+            <div className="max-h-[360px] overflow-y-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-default)] text-xs uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
                   <tr>
-                    <td colSpan={5} className="px-3 py-4 text-center text-[var(--fg-tertiary)]">
-                      No station totals yet.
-                    </td>
+                    <th className="px-3 py-3">District</th>
+                    <th className="px-3 py-3">Station</th>
+                    <th className="px-3 py-3">Crimes</th>
+                    <th className="px-3 py-3">Dominant crime</th>
+                    <th className="px-3 py-3">Category</th>
                   </tr>
-                ) : null}
-                {topStationPreview.map((row) => {
-                  const analytic: ZoneAnalyticsRow = stationAnalyticsMap.get(row.name) ?? { name: row.name };
-                  return (
-                    <tr key={row.name} className="border-t">
-                      <td className="px-3 py-3">{row.district_name || "-"}</td>
-                      <td className="px-3 py-3">{row.name}</td>
-                      <td className="px-3 py-3 font-semibold">{row.crime_count}</td>
-                      <td className="px-3 py-3">{analytic.dominant_crime_type || "-"}</td>
-                      <td className="px-3 py-3">{analytic.dominant_category || "-"}</td>
+                </thead>
+                <tbody>
+                  {topStationPreview.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-4 text-center text-[var(--fg-tertiary)]">No station totals yet.</td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : null}
+                  {topStationPreview.map((row) => {
+                    const analytic: ZoneAnalyticsRow = stationAnalyticsMap.get(row.name) ?? { name: row.name };
+                    return (
+                      <tr key={row.name} className="border-t">
+                        <td className="px-3 py-3">{row.district_name || "-"}</td>
+                        <td className="px-3 py-3">{row.name}</td>
+                        <td className="px-3 py-3 font-semibold">{row.crime_count}</td>
+                        <td className="px-3 py-3">{analytic.dominant_crime_type || "-"}</td>
+                        <td className="px-3 py-3">{analytic.dominant_category || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
+        {/* District-wise crime totals */}
         <div className="surface-card rounded-[28px] p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
-                District-wise crime totals
-              </h3>
-              <p className="mt-1 text-sm text-[var(--fg-secondary)]">
-                Compact preview with a CSV download for the full district list.
-              </p>
+              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">District-wise crime totals</h3>
+              <p className="mt-1 text-sm text-[var(--fg-secondary)]">Compact preview with a CSV download for the full district list.</p>
             </div>
             <button
               type="button"
@@ -754,40 +783,90 @@ export default function HotspotsPage() {
               View data
             </button>
           </div>
+
           <div className="mt-4 overflow-hidden rounded-[22px] border min-h-[320px]">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-[var(--bg-surface)] text-xs uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
-                <tr>
-                  <th className="px-3 py-3">District</th>
-                  <th className="px-3 py-3">Crimes</th>
-                  <th className="px-3 py-3">Dominant crime</th>
-                  <th className="px-3 py-3">Category</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topDistrictPreview.length === 0 ? (
+            <div className="max-h-[360px] overflow-y-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-default)] text-xs uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
                   <tr>
-                    <td colSpan={4} className="px-3 py-4 text-center text-[var(--fg-tertiary)]">
-                      No district totals yet.
-                    </td>
+                    <th className="px-3 py-3">District</th>
+                    <th className="px-3 py-3">Crimes</th>
+                    <th className="px-3 py-3">Dominant crime</th>
+                    <th className="px-3 py-3">Category</th>
                   </tr>
-                ) : null}
-                {topDistrictPreview.map((row) => {
-                  const analytic: ZoneAnalyticsRow = districtAnalyticsMap.get(row.name) ?? { name: row.name };
-                  return (
-                    <tr key={row.name} className="border-t">
-                      <td className="px-3 py-3">{row.name}</td>
-                      <td className="px-3 py-3 font-semibold">{row.crime_count}</td>
-                      <td className="px-3 py-3">{analytic.dominant_crime_type || "-"}</td>
-                      <td className="px-3 py-3">{analytic.dominant_category || "-"}</td>
+                </thead>
+                <tbody>
+                  {topDistrictPreview.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-4 text-center text-[var(--fg-tertiary)]">No district totals yet.</td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : null}
+                  {topDistrictPreview.map((row) => {
+                    const analytic: ZoneAnalyticsRow = districtAnalyticsMap.get(row.name) ?? { name: row.name };
+                    return (
+                      <tr key={row.name} className="border-t">
+                        <td className="px-3 py-3">{row.name}</td>
+                        <td className="px-3 py-3 font-semibold">{row.crime_count}</td>
+                        <td className="px-3 py-3">{analytic.dominant_crime_type || "-"}</td>
+                        <td className="px-3 py-3">{analytic.dominant_category || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
+
+      {/* Fullscreen map modal */}
+      {isFullscreen && (
+        <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen z-[9999] bg-black flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-4 flex-shrink-0">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--fg-primary)]">Hotspot Command Map</h2>
+              <p className="mt-1 text-sm text-[var(--fg-secondary)]">Full-screen view</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsFullscreen(false)}
+                className="inline-flex items-center gap-2 rounded-2xl border bg-[var(--bg-subtle)] px-4 py-2 text-sm font-medium text-[var(--fg-secondary)] hover:bg-[var(--bg-surface)] transition"
+                title="Exit fullscreen"
+              >
+                <Minimize2 className="h-4 w-4" />
+                Exit
+              </button>
+              <button
+                onClick={() => setIsFullscreen(false)}
+                className="inline-flex items-center gap-2 rounded-2xl border bg-[var(--risk-50)] px-3 py-2 text-sm font-medium text-[var(--risk-high)] hover:bg-[var(--risk-100)] transition"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Map container - full viewport */}
+          <div className="flex-1 w-full overflow-hidden">
+            <HotspotsMap
+              mode={mode}
+              hotspots={hotspots}
+              heatPoints={heatPoints}
+              womenHeatPoints={showWomenSafety ? womenHeatPoints : []}
+              accidentHeatPoints={showAccidents ? accidentHeatPoints : []}
+              districts={districtsGeo}
+              stateBoundary={stateBoundary}
+              stations={stationsGeo}
+              showDistrictShading={showDistrictShading}
+              selectedHotspotId={selectedHotspotId}
+              onSelectHotspot={setSelectedHotspotId}
+              onModeChange={setMode}
+              firIncidents={firPins}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

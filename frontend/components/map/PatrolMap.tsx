@@ -2,12 +2,17 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import { Polyline, Marker, TileLayer, useMap } from "react-leaflet";
+import { Polyline, Marker, TileLayer, GeoJSON, useMap } from "react-leaflet";
+import type { FeatureCollection } from "geojson";
 
 const MapContainer = dynamic(
   () => import("react-leaflet").then((mod) => mod.MapContainer),
   { ssr: false }
 );
+
+const STADIA = "https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png";
+const BIHAR_BOUNDS: [[number, number], [number, number]] = [[24.3, 83.2], [27.5, 88.5]];
+const DISTRICT_STYLE = { color: "#93c5fd", weight: 1, opacity: 0.55, fillColor: "#f8fafc", fillOpacity: 0.15 };
 
 type Stop = {
   latitude: number;
@@ -18,8 +23,11 @@ type Stop = {
 const FitBounds = ({ positions }: { positions: [number, number][] }) => {
   const map = useMap();
   useEffect(() => {
-    if (!positions.length) return;
-    map.fitBounds(positions, { padding: [24, 24] });
+    if (positions.length) {
+      map.fitBounds(positions, { padding: [24, 24] });
+    } else {
+      map.fitBounds(BIHAR_BOUNDS, { padding: [28, 28] });
+    }
   }, [positions, map]);
   return null;
 };
@@ -36,6 +44,11 @@ export default function PatrolMap({
     [stops]
   );
   const [idx, setIdx] = useState(0);
+  const [districtGeo, setDistrictGeo] = useState<FeatureCollection | null>(null);
+
+  useEffect(() => {
+    fetch("/bihar_districts.geojson").then(r => r.json()).then(setDistrictGeo).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!simulate || positions.length === 0) return;
@@ -53,11 +66,9 @@ export default function PatrolMap({
         Patrol route preview
       </div>
       <MapContainer center={markerPos} zoom={8} className="h-full w-full">
-        <TileLayer
-          attribution="Tiles"
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        />
+        <TileLayer url={STADIA} attribution='&copy; Stadia Maps' />
         <FitBounds positions={positions} />
+        {districtGeo && <GeoJSON data={districtGeo} style={() => DISTRICT_STYLE} />}
         {positions.length > 0 && (
           <Polyline
             positions={positions}

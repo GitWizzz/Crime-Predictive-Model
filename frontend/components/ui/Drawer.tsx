@@ -6,10 +6,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   children?: ReactNode;
-  width?: string; // tailwind width e.g. 'w-80'
+  width?: string;
+  backdrop?: boolean;
 };
 
-export default function Drawer({ open, onClose, children, width = "w-80" }: Props) {
+export default function Drawer({ open, onClose, children, width = "w-80", backdrop = true }: Props) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -23,10 +24,12 @@ export default function Drawer({ open, onClose, children, width = "w-80" }: Prop
       aria-hidden={!open}
       className={`fixed inset-0 z-40 flex ${open ? "pointer-events-auto" : "pointer-events-none"}`}
     >
-      <div
-        onClick={onClose}
-        className={`absolute inset-0 bg-black/30 transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
-      />
+      {backdrop && (
+        <div
+          onClick={onClose}
+          className={`absolute inset-0 bg-black/30 transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
+        />
+      )}
 
       <div
         role="dialog"

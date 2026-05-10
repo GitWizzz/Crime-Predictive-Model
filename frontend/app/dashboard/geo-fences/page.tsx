@@ -1,13 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GeoJsonObject } from "geojson";
 import { Plus, Trash2, ToggleLeft, ToggleRight, AlertCircle } from "lucide-react";
 import { fetchZones } from "@/services/zones";
 import { apiGet, apiPost } from "@/services/api";
 
-const HotspotsMap = dynamic(() => import("@/components/map/HotspotsMap"), { ssr: false });
+const GeoFenceMap = dynamic(() => import("@/components/map/GeoFenceMap"), { ssr: false });
+const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 
 type GeoFence = {
   id: number;
@@ -22,17 +23,28 @@ type GeoFence = {
 };
 
 const typeTone: Record<string, string> = {
-  SCHOOL:      "bg-[var(--accent-50)] text-[var(--accent-700)]",
-  GOVERNMENT:  "bg-[var(--risk-high-bg)] text-[var(--risk-high)]",
-  MARKET:      "bg-[var(--risk-medium-bg)] text-[var(--risk-medium)]",
-  HOSPITAL:    "bg-[var(--risk-low-bg)] text-[var(--risk-low)]",
-  TRANSIT:     "bg-[var(--bg-subtle)] text-[var(--fg-secondary)]",
-  OTHER:       "bg-[var(--bg-subtle)] text-[var(--fg-secondary)]",
+  SCHOOL:     "bg-[var(--accent-50)] text-[var(--accent-700)]",
+  GOVERNMENT: "bg-[var(--risk-high-bg)] text-[var(--risk-high)]",
+  HOSPITAL:   "bg-[var(--risk-low-bg)] text-[var(--risk-low)]",
+  RELIGIOUS:  "bg-amber-50 text-amber-700",
+  BORDER:     "bg-[var(--bg-subtle)] text-[var(--fg-secondary)]",
+  CUSTOM:     "bg-emerald-50 text-emerald-700",
 };
 
-const FENCE_TYPES = ["SCHOOL", "GOVERNMENT", "MARKET", "HOSPITAL", "TRANSIT", "OTHER"];
+const FENCE_TYPES = ["SCHOOL", "HOSPITAL", "GOVERNMENT", "RELIGIOUS", "BORDER", "CUSTOM"];
 
 const emptyForm = { name: "", type: "SCHOOL", description: "", alert_radius_m: 500 };
+
+function circlePolygon(lat: number, lon: number, radiusM: number, points = 36) {
+  const coords: [number, number][] = [];
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * 2 * Math.PI;
+    const dLat = (radiusM / 111320) * Math.cos(angle);
+    const dLon = (radiusM / (111320 * Math.cos((lat * Math.PI) / 180))) * Math.sin(angle);
+    coords.push([lon + dLon, lat + dLat]);
+  }
+  return { type: "Polygon" as const, coordinates: [coords] };
+}
 
 export default function GeoFencesPage() {
   const [token] = useState<string | null>(() =>
@@ -51,6 +63,8 @@ export default function GeoFencesPage() {
   const [error, setError]             = useState<string | null>(null);
   const [showCreate, setShowCreate]   = useState(false);
   const [form, setForm]               = useState(emptyForm);
+  const [centerLat, setCenterLat]     = useState<number | null>(null);
+  const [centerLng, setCenterLng]     = useState<number | null>(null);
   const [creating, setCreating]       = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -122,13 +136,14 @@ export default function GeoFencesPage() {
 
   const createFence = async () => {
     if (!token) return;
+    if (!centerLat || !centerLng) {
+      setCreateError("Pick a location on the map first.");
+      return;
+    }
     setCreating(true);
     setCreateError(null);
     try {
-      const boundary = {
-        type: "Polygon",
-        coordinates: [[[85.13, 25.60], [85.14, 25.60], [85.14, 25.61], [85.13, 25.61], [85.13, 25.60]]],
-      };
+      const boundary = circlePolygon(centerLat, centerLng, Number(form.alert_radius_m) || 500);
       const res = await apiPost("/api/geo-fences", {
         name: form.name,
         type: form.type,
@@ -140,7 +155,10 @@ export default function GeoFencesPage() {
       if (!res.success) throw new Error(res.message || "Failed to create fence");
       setShowCreate(false);
       setForm(emptyForm);
+      setCenterLat(null);
+      setCenterLng(null);
       await loadFences();
+      if (res.data) setSelected(res.data);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Failed to create fence");
     } finally {
@@ -151,18 +169,19 @@ export default function GeoFencesPage() {
   const activeFences  = fences.filter((f) => f.active);
   const inactiveFences = fences.filter((f) => !f.active);
 
-  const fencesGeoJson: GeoJsonObject | null = fences.length
-    ? {
-        type: "FeatureCollection",
-        features: fences
-          .filter((f) => f.boundary)
-          .map((f) => ({
-            type: "Feature",
-            geometry: f.boundary,
-            properties: { id: f.id, name: f.name, active: f.active, type: f.type },
-          })),
-      } as GeoJsonObject
-    : null;
+  const rightRef = useRef<HTMLDivElement | null>(null);
+  const [leftMaxH, setLeftMaxH] = useState<number>(480);
+
+  useEffect(() => {
+    const update = () => {
+      if (rightRef.current) {
+        setLeftMaxH(rightRef.current.offsetHeight);
+      }
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [fences, selected, loading, showCreate]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-4">
@@ -193,7 +212,7 @@ export default function GeoFencesPage() {
 
       <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
         {/* Fence list */}
-        <div className="space-y-2">
+        <div className="space-y-2 overflow-y-auto pr-2" style={{ maxHeight: `${leftMaxH}px` }}>
           {loading ? (
             <div className="rounded-[20px] border bg-[var(--bg-surface)] p-6 text-center text-sm text-[var(--fg-tertiary)]">
               Loading fences…
@@ -217,7 +236,7 @@ export default function GeoFencesPage() {
                       <p className="truncate text-[14px] font-semibold tracking-[-0.01em] text-[var(--fg-primary)]">
                         {fence.name}
                       </p>
-                      <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${typeTone[fence.type] || typeTone.OTHER}`}>
+                      <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${typeTone[fence.type] || typeTone.CUSTOM}`}>
                         {fence.type}
                       </span>
                     </div>
@@ -263,7 +282,7 @@ export default function GeoFencesPage() {
         </div>
 
         {/* Map + detail */}
-        <section className="surface-card rounded-[26px] p-5">
+        <section ref={rightRef} className="surface-card rounded-[26px] p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
@@ -276,20 +295,19 @@ export default function GeoFencesPage() {
               </p>
             </div>
             {selected && (
-              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${typeTone[selected.type] || typeTone.OTHER}`}>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${typeTone[selected.type] || typeTone.CUSTOM}`}>
                 {selected.type}
               </span>
             )}
           </div>
 
           <div className="relative mt-4 h-[480px] overflow-hidden rounded-[20px] border">
-            <HotspotsMap
-              mode="dbscan"
-              hotspots={[]}
-              heatPoints={[]}
-              districts={fencesGeoJson || districtsGeo}
+            <GeoFenceMap
+              fences={fences}
+              selectedId={selected?.id ?? null}
+              onFenceClick={setSelected}
+              districts={districtsGeo}
               stateBoundary={stateBoundary}
-              showDistrictShading={!fencesGeoJson}
             />
           </div>
 
@@ -313,11 +331,24 @@ export default function GeoFencesPage() {
       {/* Create fence modal */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-[24px] bg-[var(--bg-surface)] p-6 shadow-2xl">
+          <div className="w-full max-w-lg rounded-[24px] bg-[var(--bg-surface)] p-6 shadow-2xl">
             <h2 className="text-lg font-semibold text-[var(--fg-primary)]">Create geo-fence</h2>
             <p className="mt-1 text-[12.5px] text-[var(--fg-tertiary)]">
-              A default polygon boundary will be applied. Edit geometry via PostGIS or the map editor after creation.
+              Click the map to set the fence centre. A circular boundary is drawn using the alert radius.
             </p>
+            <div className="mt-3 overflow-hidden rounded-[16px] border">
+              <MapPicker
+                lat={centerLat ?? undefined}
+                lng={centerLng ?? undefined}
+                onChange={(lat, lng) => { setCenterLat(lat); setCenterLng(lng); }}
+                zoom={7}
+              />
+            </div>
+            {centerLat && centerLng && (
+              <p className="mt-1 text-[11px] text-[var(--fg-tertiary)]">
+                Centre: {centerLat.toFixed(4)}, {centerLng.toFixed(4)}
+              </p>
+            )}
             <div className="mt-4 space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--fg-tertiary)]">Name</label>
@@ -360,14 +391,14 @@ export default function GeoFencesPage() {
             {createError && <p className="mt-3 text-sm text-[var(--risk-high)]">{createError}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <button
-                onClick={() => { setShowCreate(false); setCreateError(null); }}
+                onClick={() => { setShowCreate(false); setCreateError(null); setCenterLat(null); setCenterLng(null); }}
                 className="rounded-[12px] border px-4 py-2 text-sm font-medium text-[var(--fg-secondary)]"
               >
                 Cancel
               </button>
               <button
                 onClick={createFence}
-                disabled={creating || !form.name}
+                disabled={creating || !form.name || !centerLat || !centerLng}
                 className="rounded-[12px] bg-[var(--accent-500)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {creating ? "Creating…" : "Create fence"}

@@ -1,0 +1,73 @@
+<h2>3 ways to fix the maps</h2>
+<p class="subtitle">All three fix tiles + real Bihar shapes + better visuals. They differ in how deep the overhaul goes.</p>
+
+<div class="options">
+
+  <div class="option" data-choice="leaflet-fix" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Fix Leaflet in place <span style="font-size:11px;background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:600;">Recommended</span></h3>
+      <p>Keep react-leaflet. Switch to a reliable tile provider (OpenStreetMap / Stadia). Bundle real Bihar district GeoJSON as a static file in <code>/public</code> so the map never depends on the backend for shapes. Add crime intensity labels, proper legend, and color scale.</p>
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+        <div style="background:rgba(22,163,74,0.08);padding:8px 12px;border-radius:10px;border:1px solid rgba(22,163,74,0.2);">
+          ✅ Least code change<br>
+          ✅ Works with existing data<br>
+          ✅ Fastest to ship
+        </div>
+        <div style="background:rgba(220,38,38,0.06);padding:8px 12px;border-radius:10px;border:1px solid rgba(220,38,38,0.15);">
+          ⚠ Still Leaflet limits<br>
+          ⚠ Tiles need internet
+        </div>
+      </div>
+
+      <div style="margin-top:14px;background:var(--surface-2);border-radius:12px;padding:12px;font-size:12px;border:1px solid var(--border);">
+        <strong>What you'll see:</strong> Real Bihar map with 38 district shapes coloured by FIR density (blue → orange → red). Hotspot circles with crime count labels. Risk legend bottom-left. Tabs for Cluster / Heatmap / Women safety.
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="mapbox" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Upgrade to Mapbox GL</h3>
+      <p>Replace react-leaflet with <code>react-map-gl</code> (Mapbox). Much smoother rendering, built-in satellite/street toggle, hardware-accelerated. Mapbox free tier = 50,000 map loads/month.</p>
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+        <div style="background:rgba(22,163,74,0.08);padding:8px 12px;border-radius:10px;border:1px solid rgba(22,163,74,0.2);">
+          ✅ Best visual quality<br>
+          ✅ Smooth zoom/pan<br>
+          ✅ 3D terrain option
+        </div>
+        <div style="background:rgba(220,38,38,0.06);padding:8px 12px;border-radius:10px;border:1px solid rgba(220,38,38,0.15);">
+          ❌ Needs Mapbox API key<br>
+          ❌ Larger rewrite<br>
+          ❌ External dependency
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="svg-map" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>SVG choropleth (no tiles needed)</h3>
+      <p>Replace the map with a pure SVG Bihar outline — like the analytics scatter plot but for the full state. Districts as SVG paths, no internet required for tiles, fully offline-capable. Works inside the analytics page too.</p>
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+        <div style="background:rgba(22,163,74,0.08);padding:8px 12px;border-radius:10px;border:1px solid rgba(22,163,74,0.2);">
+          ✅ No tile dependency<br>
+          ✅ Works offline<br>
+          ✅ Matches design system
+        </div>
+        <div style="background:rgba(220,38,38,0.06);padding:8px 12px;border-radius:10px;border:1px solid rgba(220,38,38,0.15);">
+          ❌ No street-level zoom<br>
+          ❌ Less familiar as "a map"
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:28px;padding:18px 20px;background:rgba(59,110,255,0.06);border-radius:16px;border:1px solid rgba(59,110,255,0.15);font-size:13px;line-height:1.7;">
+  <strong>My recommendation → A</strong><br>
+  Fastest path: bundle <code>bihar-districts.geojson</code> in <code>/public</code>, switch tile URL to Stadia (free, no key needed), add crime labels + colour scale. Every map in the dashboard — home preview, hotspots page, analytics scatter — gets fixed in one go.
+</div>

@@ -15,7 +15,7 @@ import {
   ShieldAlert,
   Siren,
   TriangleAlert,
-  Trophy,
+  
   Zap,
 } from "lucide-react";
 import { fetchFIRs, fetchHotspots } from "@/services/hotspots";
@@ -366,7 +366,7 @@ export default function DashboardPage() {
           forecastSeries.length >= 2
             ? fetchMlForecast(token, { series: forecastSeries, periods: 14, freq: "D" })
             : Promise.resolve(null),
-          fetchOfficerLeaderboard(token, { startDate: sevenDaysAgo, limit: 5 }),
+          fetchOfficerLeaderboard(token, { startDate: sevenDaysAgo, limit: 4 }),
         ]);
 
         const summary = summaryRes.status === "fulfilled" ? summaryRes.value.data || {} : {};
@@ -491,8 +491,8 @@ export default function DashboardPage() {
   const avgResponse = Math.max(8, Math.round(18 - Math.min(4, stats.hotspotTotal / 12)));
   const activePatrolUnits = Math.max(12, Math.min(56, stats.stationTotal));
   const forecastWindow = forecastPoints.slice(0, 7);
-  const forecastLow = forecastWindow.length ? Math.min(...forecastWindow.map((point) => point.low ?? point.yhat)) : 0;
-  const forecastHigh = forecastWindow.length ? Math.max(...forecastWindow.map((point) => point.high ?? point.yhat)) : 0;
+  const forecastLow = forecastWindow.length ? Math.round(Math.min(...forecastWindow.map((point) => point.low ?? point.yhat))) : 0;
+  const forecastHigh = forecastWindow.length ? Math.round(Math.max(...forecastWindow.map((point) => point.high ?? point.yhat))) : 0;
   const forecastMid = forecastWindow.length ? Math.round(forecastWindow.reduce((sum, point) => sum + point.yhat, 0) / forecastWindow.length) : 0;
   const topRiskRows = riskRows.slice(0, 5);
   const topSeasonal = [...seasonalRows].sort((a, b) => b.total - a.total)[0];
@@ -507,7 +507,7 @@ export default function DashboardPage() {
         .sort((a, b) => b.crimeCount - a.crimeCount)
         .slice(0, 5)
         .map((hotspot, index) => ({
-          name: hotspot.clusterId,
+          name: hotspot.clusterId.replace(/^cluster_/i, ""),
           incidents: hotspot.crimeCount,
           risk: index === 0 || hotspot.crimeCount > (previewHotspots[1]?.crimeCount || hotspot.crimeCount) ? "high" : index < 3 ? "medium" : "low",
           delta: index === 0 ? "+18%" : index === 1 ? "+11%" : index === 2 ? "+7%" : "-3%",
@@ -743,14 +743,16 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-[22px] border">
-            <div className="grid grid-cols-[1.5fr_1fr_1.2fr_0.7fr_0.7fr] gap-3 bg-[var(--bg-subtle)] px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
-              <span>FIR no</span>
-              <span>Type</span>
-              <span>Zone</span>
-              <span>Status</span>
-              <span className="text-right">Time</span>
+          <div className="mt-5 overflow-hidden rounded-[20px] border border-[var(--border-default)]">
+            {/* Table header */}
+            <div className="grid grid-cols-[1fr_1.5fr_1.2fr_1.5fr_1fr] gap-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
+              <span className="py-1">FIR no</span>
+              <span className="py-1">Type</span>
+              <span className="py-1">Zone</span>
+              <span className="py-1">Status</span>
+              <span className="py-1 text-right">Time</span>
             </div>
+            {/* Table body */}
             {recentFirs.length ? (
               recentFirs.map((fir) => {
                 const crimeType = fir.crime_type || "Unknown";
@@ -769,29 +771,31 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={fir.id}
-                    className="grid grid-cols-[1.5fr_1fr_1.2fr_0.7fr_0.7fr] gap-3 border-t px-5 py-3 text-sm"
+                    className="grid grid-cols-[1fr_1.5fr_1.2fr_1.5fr_1fr] gap-0 border-b border-[var(--border-default)] px-6 py-4 text-sm items-center hover:bg-[var(--bg-subtle)] transition"
                   >
-                    <span className="truncate font-mono text-[var(--fg-primary)]">{fir.id}</span>
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${crimePalette[risk]}`} />
+                    <span className="truncate font-mono font-medium text-[var(--fg-primary)]">{fir.id}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`h-2 w-2 rounded-full flex-shrink-0 ${crimePalette[risk]}`} />
                       <span className="truncate text-[var(--fg-primary)]">{crimeType}</span>
                     </div>
                     <span className="truncate text-[var(--fg-secondary)]">{fir.zone || "N/A"}</span>
-                    <span
-                      className={`inline-flex h-6 items-center justify-center rounded-xl px-2 text-xs font-semibold ${
-                        (fir.status || "Open") === "Closed"
-                          ? "bg-[var(--bg-subtle)] text-[var(--fg-tertiary)]"
-                          : "bg-[var(--accent-50)] text-[var(--accent-700)]"
-                      }`}
-                    >
-                      {fir.status || "Open"}
-                    </span>
-                    <span className="text-right text-[var(--fg-tertiary)]">{timeLabel}</span>
+                    <div className="flex items-center">
+                      <span
+                        className={`inline-flex h-6 items-center justify-center rounded-lg px-2.5 text-xs font-semibold whitespace-nowrap ${
+                          (fir.status || "Open") === "Closed"
+                            ? "bg-[var(--bg-subtle)] text-[var(--fg-tertiary)]"
+                            : "bg-[var(--accent-50)] text-[var(--accent-700)]"
+                        }`}
+                      >
+                        {fir.status || "Open"}
+                      </span>
+                    </div>
+                    <span className="text-right text-[var(--fg-secondary)] text-sm">{timeLabel}</span>
                   </div>
                 );
               })
             ) : (
-              <div className="border-t px-5 py-4 text-sm text-[var(--fg-secondary)]">
+              <div className="px-5 py-8 text-center text-sm text-[var(--fg-secondary)]">
                 No FIR records available yet.
               </div>
             )}
@@ -825,7 +829,12 @@ export default function DashboardPage() {
 
             <div className="mt-3 px-1">
               <Sparkline
-                data={forecastWindow.length ? forecastWindow.map((point) => point.yhat) : sparkSets.forecast}
+                data={(() => {
+                  if (!forecastWindow.length) return sparkSets.forecast;
+                  const vals = forecastWindow.map((p) => p.yhat);
+                  const range = Math.max(...vals) - Math.min(...vals);
+                  return range >= 2 ? vals : sparkSets.forecast;
+                })()}
                 color="#3B6EFF"
                 height={88}
               />
@@ -911,134 +920,43 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
-      </section>
 
-      <section className="surface-card rounded-[28px] p-5 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-              Station-wise crime totals
-            </p>
-            <h3 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
-              Compact district and station summary
-            </h3>
-          </div>
-          <p className="text-sm text-[var(--fg-secondary)]">
-            Scroll inside each panel to keep the dashboard height stable.
-          </p>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-[24px] border bg-[var(--bg-surface)] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                  District-wise crime totals
-                </p>
-                <p className="mt-1 text-sm text-[var(--fg-secondary)]">
-                  Top districts by FIR volume
-                </p>
-              </div>
-              <span className="rounded-full bg-[var(--accent-50)] px-2.5 py-1 text-xs font-semibold text-[var(--accent-700)]">
-                {fmt(districtTotals.length)} districts
-              </span>
-            </div>
-            <div className="mt-4 max-h-[340px] overflow-y-auto pr-1">
-              <div className="space-y-2">
-                {topDistrictRows.length ? (
-                  topDistrictRows.map((row, index) => (
-                    <div key={`${row.name}-${index}`} className="grid grid-cols-[28px_1fr_auto] gap-3 rounded-2xl border bg-white px-4 py-3">
-                      <span className="font-mono text-xs text-[var(--fg-tertiary)]">{String(index + 1).padStart(2, "0")}</span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-[var(--fg-primary)]">{row.name}</p>
-                        <p className="truncate text-xs text-[var(--fg-tertiary)]">District total</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-[var(--fg-primary)]">{fmt(row.crime_count)}</p>
-                        <p className="text-xs text-[var(--fg-tertiary)]">crimes</p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed px-4 py-8 text-sm text-[var(--fg-secondary)]">
-                    No district totals available.
-                  </div>
-                )}
-              </div>
+        <div className="surface-card rounded-[28px] p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+                Officer activity
+              </p>
+              <h3 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+                Top FIR filers · 7 days
+              </h3>
             </div>
           </div>
-
-          <div className="rounded-[24px] border bg-[var(--bg-surface)] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                  Station-wise crime totals
-                </p>
-                <p className="mt-1 text-sm text-[var(--fg-secondary)]">
-                  Top police stations by FIR volume
-                </p>
+          <div className="mt-5 divide-y divide-(--border-default)">
+            {officerLeaderboard.length ? officerLeaderboard.map((officer, index) => (
+              <div key={officer.id} className="grid grid-cols-[28px_1fr_auto] items-center gap-3 py-3">
+                <span className="font-mono text-xs text-(--fg-tertiary)">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-(--fg-primary)">{officer.name}</p>
+                  <p className="truncate text-[11px] text-(--fg-tertiary)">{officer.police_station || officer.zone || "—"}</p>
+                </div>
+                <span className={`rounded-xl px-2.5 py-1 text-xs font-semibold ${
+                  index === 0 ? "risk-badge-high" : index < 3 ? "risk-badge-medium" : "risk-badge-low"
+                }`}>
+                  {officer.fir_count} FIRs
+                </span>
               </div>
-              <span className="rounded-full bg-[var(--accent-50)] px-2.5 py-1 text-xs font-semibold text-[var(--accent-700)]">
-                {fmt(stationTotals.length)} stations
-              </span>
-            </div>
-            <div className="mt-4 max-h-[340px] overflow-y-auto pr-1">
-              <div className="space-y-2">
-                {topStationRows.length ? (
-                  topStationRows.map((row, index) => (
-                    <div key={`${row.name}-${index}`} className="grid grid-cols-[28px_1fr_auto] gap-3 rounded-2xl border bg-white px-4 py-3">
-                      <span className="font-mono text-xs text-[var(--fg-tertiary)]">{String(index + 1).padStart(2, "0")}</span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-[var(--fg-primary)]">{row.name}</p>
-                        <p className="truncate text-xs text-[var(--fg-tertiary)]">Station total</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-[var(--fg-primary)]">{fmt(row.crime_count)}</p>
-                        <p className="text-xs text-[var(--fg-tertiary)]">crimes</p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed px-4 py-8 text-sm text-[var(--fg-secondary)]">
-                    No station totals available.
-                  </div>
-                )}
-              </div>
-            </div>
+            )) : (
+              <p className="py-6 text-center text-sm text-(--fg-tertiary)">No officer data yet.</p>
+            )}
           </div>
         </div>
       </section>
 
-      <section className="surface-card rounded-[28px] p-5">
-        <div className="flex items-center gap-2">
-          <Trophy className="h-4 w-4 text-[var(--accent-500)]" />
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-              Officer leaderboard
-            </p>
-            <h3 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
-              FIRs registered · this week
-            </h3>
-          </div>
-        </div>
-        <div className="mt-5 space-y-4">
-          {(officerLeaderboard.length
-            ? officerLeaderboard.map((o) => ({ name: o.name, station: o.police_station || o.zone || "N/A", value: o.fir_count }))
-            : Array.from({ length: 5 }, (_, i) => ({ name: `Officer ${i + 1}`, station: "—", value: 0 }))
-          ).map((officer) => (
-            <div key={officer.name} className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent-50)] text-xs font-semibold text-[var(--accent-700)]">
-                {officer.name.split(" ").slice(-1)[0][0]}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-[var(--fg-primary)]">{officer.name}</p>
-                <p className="truncate text-xs text-[var(--fg-tertiary)]">{officer.station}</p>
-              </div>
-              <span className="text-sm font-semibold text-[var(--fg-primary)]">{officer.value}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+
+      
 
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="surface-card rounded-[24px] p-5">

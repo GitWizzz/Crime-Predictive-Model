@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   AlertTriangle,
   Calendar,
@@ -33,6 +34,8 @@ import {
   fetchWomenSafetyFIRs,
 } from "@/services/analytics";
 
+const BehavioralMap = dynamic(() => import("@/components/map/BehavioralMap"), { ssr: false });
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SeasonalRow = { label: string; total: number; order_key?: string };
@@ -43,7 +46,7 @@ type RiskRow = {
   recency_days: number; density: number; repeat_rate: number;
 };
 
-type BehavioralPoint = { id: string; x: number; y: number; cluster: "A" | "B" | "C"; label?: string };
+type BehavioralPoint = { id: string; lat: number; lon: number; cluster: "A" | "B" | "C"; label?: string };
 
 type FIRIncident = { id: number; date_time?: string; crime_type?: string; zone?: string };
 
@@ -66,11 +69,6 @@ const clusterMeta = {
   C: { color: "#DC2626", label: "violent zones" },
 };
 
-// Normalize Bihar lat/lon → SVG coordinate space (viewBox 0 0 240 200, axes at x=20,y=180)
-const LAT_MIN = 24.0; const LAT_MAX = 27.8;
-const LON_MIN = 83.0; const LON_MAX = 88.5;
-const toSvgX = (lon: number) => 25 + ((lon - LON_MIN) / (LON_MAX - LON_MIN)) * 195;
-const toSvgY = (lat: number) => 175 - ((lat - LAT_MIN) / (LAT_MAX - LAT_MIN)) * 155;
 
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: "forecast",  label: "Forecasts" },
@@ -186,15 +184,15 @@ export default function AnalyticsPage() {
 
       if (behavioralRes.status === "fulfilled" && Array.isArray(behavioralRes.value.data?.points)) {
         const pts = behavioralRes.value.data.points as Array<{ id?: string | number; x?: number; y?: number; label?: string; cluster_id?: string | null }>;
-        const used = pts.filter((p) => p.x != null && p.y != null && Number(p.x) > 60);
+        // x = longitude, y = latitude from backend; filter to valid Bihar coordinates
+        const used = pts.filter((p) => p.x != null && p.y != null && Number(p.x) > 80 && Number(p.y) > 20);
         if (used.length > 0) {
-          // x = longitude, y = latitude from backend
           setBehavioral(used.map((p, i) => {
             const score = mappedRisk[i % Math.max(1, mappedRisk.length)]?.score ?? 35;
             return {
               id: String(p.id ?? i),
-              x: toSvgX(Number(p.x)),
-              y: toSvgY(Number(p.y)),
+              lat: Number(p.y),
+              lon: Number(p.x),
               cluster: computeCluster(score),
               label: p.label,
             };
@@ -269,7 +267,7 @@ export default function AnalyticsPage() {
     ];
   }, [seasonal]);
 
-  const maxSeasonal = Math.max(...seasonalChartData.map((r) => Math.max(r.actual ?? 0, r.forecast ?? 0)), 1);
+  const maxSeasonal = Math.max(...seasonalChartData.map((r) => Math.max(r.actual ?? 0, (r as { forecast?: number }).forecast ?? 0)), 1);
 
   // Weekly breakdown from FIRs
   const weeklyData = useMemo(() => {
@@ -428,7 +426,7 @@ export default function AnalyticsPage() {
                     </linearGradient>
                   </defs>
                   <Bar dataKey="actual" fill="url(#barGrad)" radius={[4, 4, 0, 0]} />
-                  <Line type="monotone" dataKey="actual" stroke="#111827" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="actual" stroke="var(--fg-primary)" strokeWidth={2} dot={false} strokeOpacity={0.85} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -509,38 +507,9 @@ export default function AnalyticsPage() {
       {/* ── BEHAVIOURAL TAB ── */}
       {tab === "behavioral" && (
         <div className="grid gap-4 lg:grid-cols-3">
-          <SectionCard className="lg:col-span-2" title="Behavioural clusters" subtitle="PCA of zone crime profiles — dots = individual FIR incidents">
-            <div className="relative h-[360px] overflow-hidden rounded-[18px] border bg-[var(--bg-subtle)]/40">
-              <svg viewBox="0 0 240 200" className="absolute inset-0 h-full w-full">
-                {/* Grid lines */}
-                <line x1="20" y1="180" x2="230" y2="180" stroke="#CBD0D7" strokeWidth="0.8" />
-                <line x1="20" y1="20"  x2="20"  y2="180" stroke="#CBD0D7" strokeWidth="0.8" />
-                {/* Axis labels */}
-                <text x="125" y="195" fontSize="8" fill="#94a3b8" textAnchor="middle">West → East (Longitude)</text>
-                <text x="10" y="100" fontSize="8" fill="#94a3b8" textAnchor="middle" transform="rotate(-90 10 100)">South → North (Latitude)</text>
-                {/* Data points */}
-                {behavioral.map((point) => (
-                  <circle
-                    key={point.id}
-                    cx={Math.max(22, Math.min(228, point.x))}
-                    cy={Math.max(22, Math.min(178, point.y))}
-                    r="5"
-                    fill={clusterMeta[point.cluster].color}
-                    opacity="0.75"
-                    stroke="#fff"
-                    strokeWidth="1.2"
-                  >
-                    <title>{point.label || point.cluster}</title>
-                  </circle>
-                ))}
-                {/* Legend */}
-                <circle cx="30"  cy="14" r="4" fill="#DC2626" />
-                <text x="37" y="17" fontSize="8" fontWeight="600" fill="#DC2626">C · violent</text>
-                <circle cx="90"  cy="14" r="4" fill="#D97706" />
-                <text x="97" y="17" fontSize="8" fontWeight="600" fill="#D97706">B · property</text>
-                <circle cx="155" cy="14" r="4" fill="#3B6EFF" />
-                <text x="162" y="17" fontSize="8" fontWeight="600" fill="#3B6EFF">A · low-violence</text>
-              </svg>
+          <SectionCard className="lg:col-span-2" title="Behavioural clusters" subtitle="Zone crime profiles plotted on Bihar map — dot colour = cluster type">
+            <div className="h-[380px]">
+              <BehavioralMap points={behavioral} />
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {(["A", "B", "C"] as const).map((key) => (
@@ -747,7 +716,7 @@ export default function AnalyticsPage() {
                       return <Cell key={i} fill={isAnomaly ? "#DC2626" : "#3B6EFF"} fillOpacity={isAnomaly ? 0.9 : 0.55} />;
                     })}
                   </Bar>
-                  <Line type="monotone" dataKey="actual" stroke="#111827" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="actual" stroke="var(--fg-primary)" strokeWidth={1.5} dot={false} strokeOpacity={0.85} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -796,15 +765,25 @@ export default function AnalyticsPage() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Bihar geographic bounds for fallback scatter
+const BIHAR_LAT_MIN = 24.3, BIHAR_LAT_MAX = 27.5;
+const BIHAR_LON_MIN = 83.3, BIHAR_LON_MAX = 88.5;
+const BIHAR_LAT_MID = (BIHAR_LAT_MIN + BIHAR_LAT_MAX) / 2;
+const BIHAR_LON_MID = (BIHAR_LON_MIN + BIHAR_LON_MAX) / 2;
+
 function buildFallbackBehavioral(riskRows: Array<{ id: number; name: string; score: number }>) {
   return riskRows.slice(0, 30).map((row, index) => {
     const cluster = computeCluster(row.score);
     const angle = (index / 30) * Math.PI * 2;
-    const radius = cluster === "C" ? 30 : cluster === "B" ? 60 : 90;
+    // Cluster C = near urban centers (center), B = mid-ring, A = outer rural
+    const latSpread = cluster === "C" ? 0.6 : cluster === "B" ? 1.2 : 1.6;
+    const lonSpread = cluster === "C" ? 1.0 : cluster === "B" ? 2.0 : 2.4;
     return {
       id: String(row.id),
-      x: 120 + Math.cos(angle) * radius + (Math.random() - 0.5) * 20,
-      y: 100 + Math.sin(angle) * radius * 0.6 + (Math.random() - 0.5) * 20,
+      lat: Math.max(BIHAR_LAT_MIN + 0.1, Math.min(BIHAR_LAT_MAX - 0.1,
+        BIHAR_LAT_MID + Math.sin(angle) * latSpread * 0.5 + (Math.random() - 0.5) * 0.4)),
+      lon: Math.max(BIHAR_LON_MIN + 0.1, Math.min(BIHAR_LON_MAX - 0.1,
+        BIHAR_LON_MID + Math.cos(angle) * lonSpread * 0.5 + (Math.random() - 0.5) * 0.6)),
       cluster,
       label: row.name,
     };

@@ -7,7 +7,7 @@ import { Calendar, Filter, TrafficCone } from "lucide-react";
 import { fetchZones } from "@/services/zones";
 import { fetchIradAccidents, fetchIradHotspots } from "@/services/irad";
 
-const HotspotsMap = dynamic(() => import("@/components/map/HotspotsMap"), { ssr: false });
+const AccidentMap = dynamic(() => import("@/components/map/AccidentMap"), { ssr: false });
 
 type HeatPoint = { lat: number; lon: number; intensity: number };
 type AccidentRow = { id: number; district?: string | null; severity?: string | null; road_type?: string | null };
@@ -80,18 +80,24 @@ export default function IradPage() {
   }, [accidents]);
 
   const maxTop = Math.max(...topDistricts.map((item) => item.value), 1);
+
+  const districtCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const row of accidents) {
+      const key = (row.district || "").toLowerCase().trim();
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [accidents]);
   const dateLabel = DATE_OPTIONS.find((o) => o.days === dateDays)?.label || "Custom";
 
   return (
     <div className="relative h-[calc(100vh-9.25rem)] min-h-[780px] overflow-hidden rounded-[28px] border bg-[var(--bg-surface)]">
-      <HotspotsMap
-        mode="kde"
-        hotspots={[]}
-        heatPoints={[]}
-        accidentHeatPoints={heatPoints}
+      <AccidentMap
+        heatPoints={heatPoints}
         districts={districtsGeo}
         stateBoundary={stateBoundary}
-        showDistrictShading
+        districtCounts={districtCounts}
       />
 
       {/* Filter bar */}

@@ -1,0 +1,46 @@
+<h2>Map Improvements — What are we fixing?</h2>
+<p class="subtitle">Let's understand the current problems and pick a direction. Select everything that describes what you're seeing right now.</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="blank-tiles" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Map tiles not loading</h3>
+      <p>Grey or white blank background — the base map (roads, terrain) doesn't appear, only colored shapes on emptiness</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="square-polygons" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>District shapes look like squares / rectangles</h3>
+      <p>Bihar districts render as boxy rectangles instead of their real geographic shapes. No actual district outlines visible.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="no-data" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Map renders but shows no crime data</h3>
+      <p>The base map and districts look fine, but no hotspot circles, no heatmap colors, no cluster markers — just an empty Bihar map</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="ux-design" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Data loads but the visual design is bad</h3>
+      <p>Numbers appear and circles show up, but the overall map looks plain — no labels, no legend, hard to read crime intensity at a glance</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 32px; padding: 20px; background: rgba(59,110,255,0.06); border-radius: 16px; border: 1px solid rgba(59,110,255,0.15);">
+  <p class="label">Current map locations with issues</p>
+  <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px;">
+    <span style="padding: 6px 14px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px;">🗺 Dashboard home (small preview)</span>
+    <span style="padding: 6px 14px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px;">📍 Hotspots full page</span>
+    <span style="padding: 6px 14px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px;">📊 Analytics · Behavioural scatter</span>
+    <span style="padding: 6px 14px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px;">🚨 FIR register · location picker</span>
+  </div>
+</div>

@@ -4,72 +4,97 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ============================================================
+   LIGHT MODE TOKENS
+   ============================================================ */
 :root {
-  --bg-base: #fbfbfc;
-  --bg-surface: #ffffff;
-  --bg-surface-raised: #ffffff;
-  --bg-subtle: #f4f5f7;
-  --bg-muted: #edeff2;
-  --border-default: #e4e7eb;
-  --border-strong: #cbd0d7;
-  --border-focus: #3b6eff;
-  --fg-primary: #0b0d10;
-  --fg-secondary: #4a5159;
-  --fg-tertiary: #7b838d;
-  --accent-50: #eff4ff;
-  --accent-100: #dbe6ff;
-  --accent-500: #3b6eff;
-  --accent-600: #2a55d6;
-  --accent-700: #1f40a8;
-  --risk-low: #16a34a;
-  --risk-low-bg: #dcfce7;
-  --risk-medium: #d97706;
-  --risk-medium-bg: #fef3c7;
-  --risk-high: #dc2626;
-  --risk-high-bg: #fee2e2;
-  --risk-critical: #7f1d1d;
-  --risk-critical-bg: #fecaca;
-  --shadow-xs: 0 1px 2px rgba(11, 13, 16, 0.04);
-  --shadow-sm: 0 1px 2px rgba(11, 13, 16, 0.06), 0 1px 3px rgba(11, 13, 16, 0.05);
-  --shadow-md: 0 4px 8px rgba(11, 13, 16, 0.06), 0 2px 4px rgba(11, 13, 16, 0.06);
-  --shadow-lg: 0 12px 24px rgba(11, 13, 16, 0.08), 0 4px 8px rgba(11, 13, 16, 0.06);
+  --bg-base:            #f4f5f7;
+  --bg-surface:         #ffffff;
+  --bg-surface-raised:  #ffffff;
+  --bg-subtle:          #edeef1;
+  --bg-muted:           #e4e6ea;
+  --border-default:     #dde0e5;
+  --border-strong:      #c4c8ce;
+  --border-focus:       #15803d;
+  --fg-primary:         #0d0f12;
+  --fg-secondary:       #454d57;
+  --fg-tertiary:        #717a85;
+
+  /* Dark green primary */
+  --accent-50:          #f0fdf4;
+  --accent-100:         #dcfce7;
+  --accent-500:         #15803d;
+  --accent-600:         #166534;
+  --accent-700:         #14532d;
+
+  /* Semantic risk */
+  --risk-low:           #15803d;
+  --risk-low-bg:        #dcfce7;
+  --risk-medium:        #d97706;
+  --risk-medium-bg:     #fef3c7;
+  --risk-high:          #dc2626;
+  --risk-high-bg:       #fee2e2;
+  --risk-critical:      #7f1d1d;
+  --risk-critical-bg:   #fecaca;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(13, 15, 18, 0.05);
+  --shadow-sm: 0 1px 3px rgba(13, 15, 18, 0.07), 0 1px 2px rgba(13, 15, 18, 0.04);
+  --shadow-md: 0 4px 10px rgba(13, 15, 18, 0.08), 0 2px 4px rgba(13, 15, 18, 0.05);
+  --shadow-lg: 0 12px 28px rgba(13, 15, 18, 0.10), 0 4px 8px rgba(13, 15, 18, 0.06);
 }
 
+/* ============================================================
+   DARK MODE TOKENS — richer hierarchy, green accent
+   ============================================================ */
 .dark {
-  --bg-base: #0b0d10;
-  --bg-surface: #15181d;
-  --bg-surface-raised: #1b1f25;
-  --bg-subtle: #1f232a;
-  --bg-muted: #272c34;
-  --border-default: #272c34;
-  --border-strong: #3a4049;
-  --border-focus: #5b8aff;
-  --fg-primary: #f4f5f7;
-  --fg-secondary: #a6adb6;
-  --fg-tertiary: #7c8591;
-  --accent-50: #0f1a33;
-  --accent-100: #162648;
-  --accent-500: #5b8aff;
-  --accent-600: #3b6eff;
-  --accent-700: #2a55d6;
-  --risk-low: #22c55e;
-  --risk-low-bg: #0e2818;
-  --risk-medium: #f59e0b;
-  --risk-medium-bg: #2a1f08;
-  --risk-high: #ef4444;
-  --risk-high-bg: #2c0f0f;
-  --risk-critical: #b91c1c;
-  --risk-critical-bg: #3b0e0e;
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.28);
-  --shadow-lg: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --bg-base:            #0d0f12;
+  --bg-surface:         #141619;
+  --bg-surface-raised:  #1c2026;
+  --bg-subtle:          #1e2329;
+  --bg-muted:           #252c35;
+  --border-default:     #ffffff33;
+  --border-strong:      #2f3740;
+  --border-focus:       #22c55e;
+  --fg-primary:         #edeef0;
+  --fg-secondary:       #9aa1ab;
+  --fg-tertiary:        #6d7580;
+
+  /* Dark green primary — dark-mode adjusted */
+  --accent-50:          #052e16;
+  --accent-100:         #14532d;
+  --accent-500:         #22c55e;
+  --accent-600:         #16a34a;
+  --accent-700:         #15803d;
+
+  /* Semantic risk — slightly softened for dark */
+  --risk-low:           #22c55e;
+  --risk-low-bg:        #052e16;
+  --risk-medium:        #f59e0b;
+  --risk-medium-bg:     #27190a;
+  --risk-high:          #f87171;
+  --risk-high-bg:       #2d0f0f;
+  --risk-critical:      #ef4444;
+  --risk-critical-bg:   #3b0f0f;
+
+  /* Elevated shadows with inner-edge highlight for depth */
+  --shadow-xs: 0 1px 3px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03);
+  --shadow-sm: 0 2px 6px rgba(0,0,0,0.48), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.52), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.60), 0 0 0 1px rgba(255,255,255,0.05);
 }
 
+/* ============================================================
+   BASE LAYER
+   ============================================================ */
 @layer base {
   * {
     border-color: var(--border-default);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
+
+  *::-webkit-scrollbar { display: none; }
 
   html {
     background: var(--bg-base);
@@ -79,8 +104,8 @@
 
   body {
     background:
-      radial-gradient(circle at top left, rgba(59, 110, 255, 0.08), transparent 32%),
-      radial-gradient(circle at bottom right, rgba(217, 119, 6, 0.08), transparent 28%),
+      radial-gradient(ellipse at top left, rgba(22, 101, 52, 0.07), transparent 32%),
+      radial-gradient(ellipse at bottom right, rgba(217, 119, 6, 0.06), transparent 28%),
       var(--bg-base);
     color: var(--fg-primary);
     font-feature-settings: "cv11", "ss01", "ss03";
@@ -88,95 +113,128 @@
 
   .dark body {
     background:
-      radial-gradient(circle at top left, rgba(59, 110, 255, 0.06), transparent 28%),
-      radial-gradient(circle at bottom right, rgba(59, 110, 255, 0.03), transparent 24%),
+      radial-gradient(ellipse at top left, rgba(22, 101, 52, 0.06), transparent 30%),
       var(--bg-base);
+  }
+
+  /* Smooth transitions on all interactive elements */
+  button, a {
+    transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
   }
 
   ::selection {
     background: var(--accent-100);
     color: var(--fg-primary);
   }
+
+  input, select, textarea {
+    outline: none;
+  }
+
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    box-shadow: 0 0 0 2px var(--border-focus);
+  }
 }
 
+/* ============================================================
+   COMPONENT LAYER
+   ============================================================ */
 @layer components {
+
+  /* ── Surfaces ─────────────────────────────────────────── */
   .surface-card {
-    background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+    background: var(--bg-surface);
     border: 1px solid var(--border-default);
     box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(14px);
+  }
+
+  .dark .surface-card {
+    background: var(--bg-surface);
+    border-color: var(--border-default);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04), var(--shadow-md);
   }
 
   .surface-card-strong {
-    background: color-mix(in srgb, var(--bg-surface-raised) 96%, transparent);
-    border: 1px solid color-mix(in srgb, var(--border-strong) 82%, transparent);
+    background: var(--bg-surface-raised);
+    border: 1px solid var(--border-strong);
     box-shadow: var(--shadow-md);
-    backdrop-filter: blur(18px);
   }
 
+  .dark .surface-card-strong {
+    background: var(--bg-surface-raised);
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.05), var(--shadow-lg);
+  }
+
+  /* ── Dashboard shell background ───────────────────────── */
   .app-shell-bg {
     background:
-      radial-gradient(circle at 8% 12%, rgba(59, 110, 255, 0.14), transparent 24%),
-      radial-gradient(circle at 92% 0%, rgba(245, 158, 11, 0.12), transparent 24%),
+      radial-gradient(circle at 8% 12%, rgba(22, 101, 52, 0.08), transparent 24%),
+      radial-gradient(circle at 92% 0%, rgba(245, 158, 11, 0.06), transparent 24%),
       linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 92%, white 8%), var(--bg-base));
   }
 
   .dark .app-shell-bg {
     background:
-      radial-gradient(circle at 8% 12%, rgba(59, 110, 255, 0.12), transparent 22%),
-      radial-gradient(circle at 92% 0%, rgba(59, 110, 255, 0.04), transparent 22%),
-      linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 92%, white 8%), var(--bg-base));
+      radial-gradient(ellipse at 0% 0%, rgba(22, 101, 52, 0.07), transparent 30%),
+      var(--bg-base);
   }
 
+  /* ── Hero grid (used in DashboardShell) ───────────────── */
   .hero-grid {
     background-image:
-      linear-gradient(to right, color-mix(in srgb, var(--border-default) 85%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in srgb, var(--border-default) 85%, transparent) 1px, transparent 1px);
+      linear-gradient(to right, color-mix(in srgb, var(--border-default) 70%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--border-default) 70%, transparent) 1px, transparent 1px);
     background-size: 56px 56px;
-    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.95), transparent);
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.7), transparent);
   }
 
+  /* ── KPI stat cards ───────────────────────────────────── */
+  .dashboard-kpi {
+    background:
+      linear-gradient(140deg, color-mix(in srgb, var(--accent-50) 55%, transparent), transparent 58%),
+      var(--bg-surface);
+  }
+
+  .dark .dashboard-kpi {
+    background:
+      linear-gradient(140deg, rgba(22, 101, 52, 0.08), transparent 52%),
+      var(--bg-surface);
+  }
+
+  /* ── Map floating panel ───────────────────────────────── */
+  .map-panel {
+    background: var(--bg-surface-raised);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(12px);
+  }
+
+  .dark .map-panel {
+    background: color-mix(in srgb, var(--bg-surface-raised) 96%, transparent);
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04), var(--shadow-md);
+    backdrop-filter: blur(16px);
+  }
+
+  /* ── Risk badges ──────────────────────────────────────── */
+  .risk-badge-low      { background: var(--risk-low-bg);      color: var(--risk-low);      }
+  .risk-badge-medium   { background: var(--risk-medium-bg);   color: var(--risk-medium);   }
+  .risk-badge-high     { background: var(--risk-high-bg);     color: var(--risk-high);     }
+  .risk-badge-critical { background: var(--risk-critical-bg); color: var(--risk-critical); }
+
+  /* ── Hero orb (landing) ───────────────────────────────── */
   .hero-orb {
     background:
-      radial-gradient(circle at 30% 30%, rgba(59, 110, 255, 0.28), transparent 58%),
+      radial-gradient(circle at 30% 30%, rgba(22, 101, 52, 0.30), transparent 58%),
       radial-gradient(circle at 70% 65%, rgba(239, 68, 68, 0.18), transparent 40%),
       radial-gradient(circle at 45% 45%, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.08));
     filter: blur(12px);
   }
 
-  .dashboard-kpi {
-    background:
-      linear-gradient(135deg, color-mix(in srgb, var(--accent-50) 65%, transparent), transparent 62%),
-      color-mix(in srgb, var(--bg-surface) 92%, transparent);
-  }
-
-  .map-panel {
-    background: color-mix(in srgb, var(--bg-surface-raised) 93%, transparent);
-    border: 1px solid color-mix(in srgb, var(--border-strong) 74%, transparent);
-    box-shadow: var(--shadow-md);
-    backdrop-filter: blur(16px);
-  }
-
-  .risk-badge-low {
-    background: var(--risk-low-bg);
-    color: var(--risk-low);
-  }
-
-  .risk-badge-medium {
-    background: var(--risk-medium-bg);
-    color: var(--risk-medium);
-  }
-
-  .risk-badge-high {
-    background: var(--risk-high-bg);
-    color: var(--risk-high);
-  }
-
-  .risk-badge-critical {
-    background: var(--risk-critical-bg);
-    color: var(--risk-critical);
-  }
-
+  /* ── Leaflet map overrides ────────────────────────────── */
   .leaflet-container {
     background: #dfe9f6;
     font: inherit;
@@ -186,25 +244,38 @@
     background: #0f172a;
   }
 
-  .leaflet-control-attribution {
-    display: none;
-  }
+  .leaflet-control-attribution { display: none; }
 
   .leaflet-popup-content-wrapper {
-    background: color-mix(in srgb, var(--bg-surface-raised) 97%, transparent);
-    border: 1px solid color-mix(in srgb, var(--border-strong) 70%, transparent);
-    border-radius: 14px;
+    background: var(--bg-surface-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
     box-shadow: var(--shadow-lg);
     color: var(--fg-primary);
   }
 
   .leaflet-popup-tip {
-    background: color-mix(in srgb, var(--bg-surface-raised) 97%, transparent);
+    background: var(--bg-surface-raised);
+  }
+
+  .leaflet-tooltip.cluster-tip,
+  .leaflet-tooltip.behavioral-tip {
+    background: rgba(255, 255, 255, 0.97);
+    border: 1px solid #dde0e5;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+    padding: 6px 10px;
+    line-height: 1.4;
+  }
+
+  .leaflet-tooltip.cluster-tip::before,
+  .leaflet-tooltip.behavioral-tip::before {
+    border-top-color: #dde0e5;
   }
 
   .leaflet-tooltip.station-label {
-    background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
-    border: 1px solid color-mix(in srgb, var(--border-default) 85%, transparent);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
     border-radius: 999px;
     box-shadow: var(--shadow-xs);
     color: var(--fg-secondary);
@@ -213,42 +284,13 @@
     padding: 3px 8px;
   }
 
-  .leaflet-tooltip.station-label::before {
-    display: none;
-  }
+  .leaflet-tooltip.station-label::before { display: none; }
 
-  .hotspot-popup {
-    min-width: 220px;
-  }
+  /* ── Hotspot popup ────────────────────────────────────── */
+  .hotspot-popup          { min-width: 220px; }
+  .hotspot-popup-title    { color: var(--fg-primary); font-size: 14px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
+  .hotspot-popup-meta     { color: var(--fg-secondary); font-size: 12px; margin-bottom: 10px; }
+  .hotspot-popup-section  { color: var(--fg-tertiary); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; margin-bottom: 6px; text-transform: uppercase; }
+  .hotspot-popup-row      { display: flex; justify-content: space-between; gap: 8px; color: var(--fg-primary); font-size: 12px; }
 
-  .hotspot-popup-title {
-    color: var(--fg-primary);
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    margin-bottom: 4px;
-  }
-
-  .hotspot-popup-meta {
-    color: var(--fg-secondary);
-    font-size: 12px;
-    margin-bottom: 10px;
-  }
-
-  .hotspot-popup-section {
-    color: var(--fg-tertiary);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    margin-bottom: 6px;
-    text-transform: uppercase;
-  }
-
-  .hotspot-popup-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    color: var(--fg-primary);
-    font-size: 12px;
-  }
 }

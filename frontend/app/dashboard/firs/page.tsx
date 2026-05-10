@@ -194,6 +194,7 @@ export default function FIRsPage() {
   });
   const [firs, setFirs] = useState<FIR[]>([]);
   const [total, setTotal] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [loading, setLoading] = useState(false);
@@ -252,6 +253,7 @@ export default function FIRsPage() {
         const res = await fetchFIRs(token, params);
         setFirs((res.data?.items || []) as FIR[]);
         setTotal(res.data?.total || 0);
+        setServerTotalPages(res.data?.total_pages || Math.max(1, Math.ceil((res.data?.total || 0) / (res.data?.limit || limit))));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load FIRs");
       } finally {
@@ -303,7 +305,7 @@ export default function FIRsPage() {
     setSelectedRows((current) => current.filter((id) => displayFirs.some((fir) => fir.id === id)));
   }, [displayFirs]);
 
-  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const totalPages = serverTotalPages;
   const uniqueCrimeTypes = Array.from(new Set(firs.map((fir) => fir.crime_type).filter((x): x is string => Boolean(x)))).sort();
   const uniqueZones = Array.from(new Set(firs.map((fir) => fir.zone).filter((x): x is string => Boolean(x)))).sort();
   const activeChips = [
@@ -337,6 +339,7 @@ export default function FIRsPage() {
       const refresh = await fetchFIRs(token, { page: 1, limit });
       setFirs((refresh.data?.items || []) as FIR[]);
       setTotal(refresh.data?.total || 0);
+      setServerTotalPages(refresh.data?.total_pages || 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bulk import failed.");
     } finally {
@@ -386,6 +389,7 @@ export default function FIRsPage() {
       const refresh = await fetchFIRs(token, { page: 1, limit });
       setFirs((refresh.data?.items || []) as FIR[]);
       setTotal(refresh.data?.total || 0);
+      setServerTotalPages(refresh.data?.total_pages || 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create FIR.");
     } finally {
@@ -821,8 +825,9 @@ export default function FIRsPage() {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-[12.5px] text-[var(--fg-tertiary)]">
               <span>
-                Showing {displayFirs.length ? `${(page - 1) * limit + 1}-${(page - 1) * limit + displayFirs.length}` : "0"}
+                Showing {firs.length ? `${(page - 1) * limit + 1}–${(page - 1) * limit + firs.length}` : "0"}
                 {" "}of {total.toLocaleString("en-IN")}
+                {displayFirs.length < firs.length ? ` (${displayFirs.length} match filters)` : ""}
               </span>
               <div className="flex items-center gap-1">
                 <button

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ArrowLeft, Shield } from "lucide-react";
+import logo from "../icons/logo.jpeg"
 
 export default function TopNav() {
   const pathname = usePathname();
@@ -36,16 +37,9 @@ export default function TopNav() {
             Back to home
           </Link>
         ) : (
-          <Link href="/landing_page" className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent-50)] text-[var(--accent-600)] shadow-[var(--shadow-xs)]">
-              <Shield className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold tracking-[-0.01em] text-[var(--fg-primary)]">
-                Bihar Police
-              </p>
-              <p className="text-xs text-[var(--fg-tertiary)]">Crime Intelligence Platform</p>
-            </div>
+          <Link href="/landing_page" className="inline-flex items-center gap-2">
+            <img src={logo.src} alt="Logo" className="h-12 w-12 rounded-full" />
+            <span className="font-bold text-3xl text-[var(--accent-500)]">CrimeIntel</span>
           </Link>
         )}
 
