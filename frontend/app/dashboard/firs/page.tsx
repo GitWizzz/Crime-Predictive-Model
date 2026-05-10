@@ -304,8 +304,8 @@ export default function FIRsPage() {
   }, [displayFirs]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
-  const uniqueCrimeTypes = Array.from(new Set(firs.map((fir) => fir.crime_type).filter(Boolean))).sort();
-  const uniqueZones = Array.from(new Set(firs.map((fir) => fir.zone).filter(Boolean))).sort();
+  const uniqueCrimeTypes = Array.from(new Set(firs.map((fir) => fir.crime_type).filter((x): x is string => Boolean(x)))).sort();
+  const uniqueZones = Array.from(new Set(firs.map((fir) => fir.zone).filter((x): x is string => Boolean(x)))).sort();
   const activeChips = [
     ...statusFilters.map((item) => ({ label: `Status: ${item.replace(" (live)", "").toLowerCase()}`, clear: () => setStatusFilters((current) => current.filter((value) => value !== item)) })),
     ...crimeFilters.map((item) => ({ label: `Type: ${item.toLowerCase()}`, clear: () => setCrimeFilters((current) => current.filter((value) => value !== item)) })),

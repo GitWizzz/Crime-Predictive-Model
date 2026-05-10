@@ -152,8 +152,8 @@ docker compose up -d db redis
 # Create database and user
 psql -U postgres
 CREATE USER crimemap WITH PASSWORD 'changeme';
-CREATE DATABASE crime_db OWNER crimemap;
-\c crime_db
+CREATE DATABASE crime_hotspot_db OWNER crimemap;
+\c crime_hotspot_db
 CREATE EXTENSION postgis;
 CREATE EXTENSION pgcrypto;
 CREATE EXTENSION "uuid-ossp";
@@ -167,7 +167,7 @@ CREATE EXTENSION pg_trgm;
 cd backend
 cp .env.example .env
 # Edit .env — set DATABASE_URL, JWT_SECRET, ML_API_KEY, DB_ENCRYPTION_KEY
-# For local DB: DATABASE_URL=postgresql://crimemap:changeme@localhost:5432/crime_db
+# For local DB: DATABASE_URL=postgresql://crimemap:changeme@localhost:5432/crime_hotspot_db
 # For local ML: ML_SERVICE_URL=http://localhost:8001
 # For local Redis: REDIS_URL=redis://localhost:6379
 
@@ -383,10 +383,10 @@ docker compose exec backend npm run seed:district-boundaries
 ### Access the database directly
 ```bash
 # Via Docker
-docker compose exec db psql -U crimemap -d crime_db
+docker compose exec db psql -U crimemap -d crime_hotspot_db
 
 # Via local psql
-psql postgresql://crimemap:changeme@localhost:5432/crime_db
+psql postgresql://crimemap:changeme@localhost:5432/crime_hotspot_db
 ```
 
 ### Useful psql commands
@@ -413,10 +413,10 @@ npm run migrate:down
 ### Take a database backup
 ```bash
 # Via Docker
-docker compose exec db pg_dump -U crimemap crime_db -Fc > backup_$(date +%Y%m%d).dump
+docker compose exec db pg_dump -U crimemap crime_hotspot_db -Fc > backup_$(date +%Y%m%d).dump
 
 # Restore
-docker compose exec -T db pg_restore -U crimemap -d crime_db < backup_20250420.dump
+docker compose exec -T db pg_restore -U crimemap -d crime_hotspot_db < backup_20250420.dump
 ```
 
 ---
@@ -426,7 +426,7 @@ docker compose exec -T db pg_restore -U crimemap -d crime_db < backup_20250420.d
 ```bash
 # Backend integration tests (requires test DB)
 cd backend
-TEST_DATABASE_URL=postgresql://crimemap:changeme@localhost:5432/crime_db_test npm test
+TEST_DATABASE_URL=postgresql://crimemap:changeme@localhost:5432/crime_hotspot_db_test npm test
 
 # Frontend lint check
 cd frontend

@@ -1,1 +1,2 @@
-utf-8
+# -*- coding: utf-8 -*-
+"""Crime ML Services package."""

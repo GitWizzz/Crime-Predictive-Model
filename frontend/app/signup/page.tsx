@@ -5,7 +5,7 @@ import { SignupForm } from "@/components/auth/SignupForm";
 
 export default function SignupPage() {
   return (
-    <div className="relative min-h-screen overflow-hidden text-zinc-900 dark:text-white">
+    <div className="dark relative min-h-screen overflow-hidden text-white">
       <video
         autoPlay
         loop
@@ -16,19 +16,19 @@ export default function SignupPage() {
         <source src="/hud.mp4" type="video/mp4" />
       </video>
 
-      <div className="absolute inset-0 bg-white/40 dark:bg-black/80 transition-colors" />
+      <div className="absolute inset-0 bg-black/75" />
 
       <div className="relative z-10 min-h-[calc(100vh-56px)]">
         <div className="grid min-h-[calc(100vh-56px)] grid-cols-1 lg:grid-cols-2 overflow-visible">
         <div className="hidden lg:flex flex-col justify-center px-16">
           <div className="max-w-xl space-y-6">
             <div className="flex items-center gap-3">
-              <Shield className="h-8 w-8 text-blue-600 dark:text-blue-500" />
+              <Shield className="h-8 w-8 text-blue-400" />
               <div>
                 <h2 className="text-xl font-semibold tracking-wide">
                   CRIMEMAP
                 </h2>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="text-sm text-zinc-400">
                   Analytics & Prediction System
                 </p>
               </div>
@@ -40,7 +40,7 @@ export default function SignupPage() {
               MAPPING TOOL
             </h1>
 
-            <p className="text-zinc-700 dark:text-zinc-300">
+            <p className="text-zinc-300">
               Create an account to access predictive analytics across Bihar.
             </p>
           </div>

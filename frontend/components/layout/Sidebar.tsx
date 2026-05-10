@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   Bell,
@@ -26,7 +27,7 @@ const navGroups = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: Home },
       { label: "Hotspots", href: "/dashboard/hotspots", icon: Map },
-      { label: "FIRs", href: "/dashboard/firs", icon: FileText, badge: "14" },
+      { label: "FIRs", href: "/dashboard/firs", icon: FileText },
     ],
   },
   {
@@ -55,14 +56,43 @@ const navGroups = [
   },
 ];
 
+type AuthUser = {
+  name?: string;
+  role?: string;
+  zone?: string;
+  police_station?: string;
+  policeStation?: string;
+};
+
 export default function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const hideChrome = pathname === "/dashboard/firs" && searchParams.get("compose") === "1";
 
-  if (hideChrome) {
-    return null;
-  }
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("authUser");
+      if (raw) setUser(JSON.parse(raw));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  if (hideChrome) return null;
+
+  const displayName = user?.name || "Officer";
+  const initials = displayName
+    .split(" ")
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+  const station = user?.police_station || user?.policeStation || user?.zone || "Bihar Police";
+  const roleLabel = user?.role
+    ? user.role.charAt(0) + user.role.slice(1).toLowerCase()
+    : "Officer";
 
   return (
     <aside className="surface-card hidden h-full w-72 shrink-0 rounded-r-[28px] border-l-0 border-t-0 border-b-0 bg-white/78 lg:flex lg:flex-col dark:bg-[#15181d]/92">
@@ -73,7 +103,7 @@ export default function Sidebar() {
           </div>
           <div>
             <p className="text-sm font-semibold tracking-[-0.01em] text-[var(--fg-primary)]">
-              CrimeIntel  
+              CrimeIntel
             </p>
             <p className="text-xs text-[var(--fg-tertiary)]">Crime Intelligence</p>
           </div>
@@ -113,11 +143,6 @@ export default function Sidebar() {
                   >
                     <Icon className="h-4 w-4" />
                     <span className="flex-1">{item.label}</span>
-                    {item.badge ? (
-                      <span className="rounded-full bg-[var(--bg-surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--fg-tertiary)]">
-                        {item.badge}
-                      </span>
-                    ) : null}
                   </Link>
                 );
               })}
@@ -129,14 +154,14 @@ export default function Sidebar() {
       <div className="mt-auto border-t px-5 py-4">
         <div className="flex items-center gap-3 rounded-2xl bg-[var(--bg-subtle)] px-3 py-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent-100)] text-sm font-semibold text-[var(--accent-700)]">
-            PS
+            {initials}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-[var(--fg-primary)]">
-              SHO P. Singh
+              {displayName}
             </p>
             <p className="truncate text-xs text-[var(--fg-tertiary)]">
-              Officer, Patna Central
+              {roleLabel} · {station}
             </p>
           </div>
           <Bell className="h-4 w-4 text-[var(--fg-tertiary)]" />

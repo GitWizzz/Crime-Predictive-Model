@@ -210,7 +210,7 @@ node backend/scripts/generate_dummy_fir.js --count 500 --out backend/scripts/dum
 Import Bihar district boundaries into PostGIS:
 
 ```bash
-set DATABASE_URL=postgres://postgres:your_password@localhost:5432/crime_db
+set DATABASE_URL=postgres://postgres:your_password@localhost:5432/crime_hotspot_db
 node backend/scripts/import_zones_geojson.js --file frontend/public/geo/bihar_districts.geojson --type DISTRICT --nameKey district
 ```
 
@@ -224,7 +224,7 @@ Then fetch zones:
 Import Bihar police station boundaries into PostGIS:
 
 ```bash
-set DATABASE_URL=postgres://postgres:your_password@localhost:5432/crime_db
+set DATABASE_URL=postgres://postgres:your_password@localhost:5432/crime_hotspot_db
 node backend/scripts/import_zones_geojson.js --file frontend/public/geo/bihar_police_stations.geojson --type STATION --nameKey name
 ```
 

@@ -55,7 +55,7 @@ export default function MapPicker({ lat, lng, onChange, className, zoom = 13 }: 
               iconSize: [25, 41],
               iconAnchor: [12, 41],
               popupAnchor: [1, -34],
-              shadowUrl: markerShadowUrl.src || markerShadowUrl,
+              shadowUrl: typeof markerShadowUrl === "string" ? markerShadowUrl : (markerShadowUrl as { src: string }).src,
               shadowSize: [41, 41],
               shadowAnchor: [12, 41],
             });

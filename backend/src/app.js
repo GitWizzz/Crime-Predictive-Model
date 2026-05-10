@@ -30,7 +30,21 @@ const max = env.rateLimitMax ? Number(env.rateLimitMax) : 200;
 app.use(rateLimit({ windowMs, max }));
 app.use(
   cors({
-    origin: env.corsOrigin || "http://localhost:3000",
+    origin: (origin, callback) => {
+      // Allow all localhost origins (3000, 3001, etc.) + specific env origin
+      const allowedOrigins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+      ];
+      
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );

@@ -27,7 +27,7 @@ services:
     environment:
       PORT: 4000
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:your_password@db:5432/crime_db}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:your_password@db:5432/crime_hotspot_db}
       JWT_SECRET: ${JWT_SECRET:-change_me}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       ML_SERVICE_URL: ${ML_SERVICE_URL:-http://ml-service:8001}

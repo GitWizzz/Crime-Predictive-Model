@@ -3,13 +3,13 @@
 ## Daily Logical Backup
 
 ```bash
-pg_dump -Fc -f backup/crime_db_$(date +%F).dump crime_db
+pg_dump -Fc -f backup/crime_hotspot_db_$(date +%F).dump crime_hotspot_db
 ```
 
 ## Restore
 
 ```bash
-pg_restore -d crime_db backup/crime_db_YYYY-MM-DD.dump
+pg_restore -d crime_hotspot_db backup/crime_hotspot_db_YYYY-MM-DD.dump
 ```
 
 ## Recommendations

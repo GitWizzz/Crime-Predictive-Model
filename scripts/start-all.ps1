@@ -5,7 +5,7 @@ param(
   [string]$DbHost = "localhost",
   [string]$DbPort = "5432",
   [string]$DbUser = "postgres",
-  [string]$DbName = "crime_db",
+  [string]$DbName = "crime_hotspot_db",
   [string]$CorsOrigin = "http://localhost:3000",
   [string]$ApiBase = "http://localhost:4000",
   [string]$MlServiceUrl = "http://localhost:8001",

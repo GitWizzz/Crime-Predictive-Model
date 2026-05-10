@@ -66,7 +66,7 @@ export const firQuerySchema = z.object({
   police_station: z.coerce.string().optional(),
   status: z.coerce.string().optional(),
   page: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().positive().max(200).optional(),
+  limit: z.coerce.number().int().positive().max(5000).optional(),
 });
 
 export const firIdParamSchema = z.object({
@@ -77,5 +77,5 @@ export const firSearchQuerySchema = z.object({
   q: z.coerce.string().min(1),
   zone: z.coerce.string().optional(),
   page: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().positive().max(200).optional(),
+  limit: z.coerce.number().int().positive().max(5000).optional(),
 });
