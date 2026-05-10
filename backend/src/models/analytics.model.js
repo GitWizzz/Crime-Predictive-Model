@@ -188,6 +188,128 @@ export const getZoneAnalytics = async ({ type = "DISTRICT", startDate, endDate }
   return result.rows;
 };
 
+export const getStationDistrictCrimeTotals = async ({ startDate, endDate } = {}) => {
+  let paramIndex = 1;
+  const values = [];
+  let dateFilter = "";
+
+  if (startDate) {
+    dateFilter += ` AND f.occurred_at >= $${paramIndex++}`;
+    values.push(startDate);
+  }
+  if (endDate) {
+    dateFilter += ` AND f.occurred_at <= $${paramIndex++}`;
+    values.push(endDate);
+  }
+
+  // Query for station-wise totals
+  const stationQuery = `
+    WITH filtered_firs AS (
+      SELECT 
+        f.zone as district,
+        f.police_station as station,
+        f.crime_type,
+        COALESCE(f.category, c.category, 'Unknown') as category
+      FROM firs f
+      LEFT JOIN crime_classifications c
+        ON c.id = f.classification_id
+        OR (c.act_type = f.act_type AND c.section_code = f.section_code)
+      WHERE 1=1
+      ${dateFilter}
+    ),
+    station_stats AS (
+      SELECT
+        district,
+        station,
+        COUNT(*) as total_crimes,
+        crime_type,
+        category,
+        COUNT(*) as crime_count
+      FROM filtered_firs
+      WHERE station IS NOT NULL AND station != ''
+      GROUP BY district, station, crime_type, category
+    ),
+    station_dominant AS (
+      SELECT DISTINCT ON (district, station)
+        district,
+        station,
+        SUM(crime_count) OVER (PARTITION BY district, station) as total,
+        crime_type as dominant_crime,
+        category as dominant_category,
+        crime_count
+      FROM station_stats
+      ORDER BY district, station, crime_count DESC
+    )
+    SELECT
+      district,
+      station,
+      total as crime_count,
+      dominant_crime,
+      dominant_category
+    FROM station_dominant
+    ORDER BY district, total DESC;
+  `;
+
+  // Query for district-wise totals
+  const districtQuery = `
+    WITH filtered_firs AS (
+      SELECT 
+        f.zone as district,
+        f.crime_type,
+        COALESCE(f.category, c.category, 'Unknown') as category
+      FROM firs f
+      LEFT JOIN crime_classifications c
+        ON c.id = f.classification_id
+        OR (c.act_type = f.act_type AND c.section_code = f.section_code)
+      WHERE 1=1
+      ${dateFilter}
+    ),
+    district_stats AS (
+      SELECT
+        district,
+        crime_type,
+        category,
+        COUNT(*) as crime_count
+      FROM filtered_firs
+      WHERE district IS NOT NULL AND district != ''
+      GROUP BY district, crime_type, category
+    ),
+    district_dominant AS (
+      SELECT DISTINCT ON (district)
+        district,
+        SUM(crime_count) OVER (PARTITION BY district) as total,
+        crime_type as dominant_crime,
+        category as dominant_category,
+        crime_count
+      FROM district_stats
+      ORDER BY district, crime_count DESC
+    )
+    SELECT
+      district,
+      total as crime_count,
+      dominant_crime,
+      dominant_category
+    FROM district_dominant
+    ORDER BY total DESC;
+  `;
+
+  try {
+    const stationResult = await pool.query(stationQuery, values);
+    const districtResult = await pool.query(districtQuery, values);
+
+    return {
+      stations: stationResult.rows || [],
+      districts: districtResult.rows || []
+    };
+  } catch (error) {
+    console.error('Error fetching station/district crime totals:', error);
+    return {
+      stations: [],
+      districts: []
+    };
+  }
+};
+
 export const getSeasonalTrends = async ({ granularity = "month", startDate, endDate }) => {
   const values = [];
   let paramIndex = 1;
@@ -521,6 +643,42 @@ export const getHeatmapTimelineBuckets = async ({ zone, crimeType, startDate, en
       heat_points,
     })),
   };
+};
+
+export const getOfficerLeaderboard = async ({ startDate, endDate, limit = 5 }) => {
+  const values = [];
+  let paramIndex = 1;
+  let dateFilter = "";
+
+  if (startDate) {
+    dateFilter += ` AND f.occurred_at >= $${paramIndex++}`;
+    values.push(startDate);
+  }
+  if (endDate) {
+    dateFilter += ` AND f.occurred_at <= $${paramIndex++}`;
+    values.push(endDate);
+  }
+  values.push(limit);
+
+  const result = await pool.query(
+    `
+    SELECT
+      u.id,
+      u.name,
+      u.police_station,
+      u.zone,
+      COUNT(f.id)::int AS fir_count
+    FROM users u
+    JOIN firs f ON f.registered_by = u.id
+    WHERE 1=1
+    ${dateFilter}
+    GROUP BY u.id, u.name, u.police_station, u.zone
+    ORDER BY fir_count DESC
+    LIMIT $${paramIndex};
+    `,
+    values
+  );
+  return result.rows;
 };
 
 export const getFIRExportRows = async ({ zone, crimeType, status, startDate, endDate }) => {

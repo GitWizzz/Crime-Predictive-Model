@@ -44,3 +44,27 @@ export const fetchRiskScores = async (token: string | null, params: QueryParams 
   const suffix = search ? `?${search}` : "";
   return apiGet(`/api/analytics/risk${suffix}`, token);
 };
+
+export const fetchWomenSafetyFIRs = async (token: string | null, params: QueryParams = {}) => {
+  const search = toSearch(params);
+  const suffix = search ? `?${search}` : "";
+  return apiGet(`/api/analytics/women-safety/firs${suffix}`, token);
+};
+
+export const fetchOfficerLeaderboard = async (token: string | null, params: QueryParams = {}) => {
+  const search = toSearch(params);
+  const suffix = search ? `?${search}` : "";
+  return apiGet(`/api/analytics/officer-leaderboard${suffix}`, token);
+};
+
+export const fetchHeatmapTimeline = async (token: string | null, params: QueryParams = {}) => {
+  const search = toSearch(params);
+  const suffix = search ? `?${search}` : "";
+  return apiGet(`/api/analytics/heatmap-timeline${suffix}`, token);
+};
+
+export const fetchCompareZones = async (token: string | null, params: QueryParams = {}) => {
+  const search = toSearch(params);
+  const suffix = search ? `?${search}` : "";
+  return apiGet(`/api/analytics/compare${suffix}`, token);
+};

@@ -6,19 +6,19 @@ import type { GeoJsonObject } from "geojson";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   Activity,
-  AlertTriangle,
   ChevronRight,
   Flame,
   Layers3,
   MapPinned,
   RefreshCcw,
-  ShieldAlert,
   Siren,
 } from "lucide-react";
 import { fetchFIRs, fetchHotspots, fetchKDEHotspots } from "@/services/hotspots";
 import { fetchZones } from "@/services/zones";
 import { fetchZoneAnalytics, fetchWomenSafety } from "@/services/analytics";
 import { fetchIradHotspots } from "@/services/irad";
+import Drawer from "@/components/ui/Drawer";
+import HotspotDetail from "@/components/dashboard/HotspotDetail";
 
 const HotspotsMap = dynamic(() => import("@/components/map/HotspotsMap"), { ssr: false });
 
@@ -60,7 +60,7 @@ type ZoneAnalyticsRow = {
   dominant_category?: string;
 };
 
-const fmt = (value: number) => new Intl.NumberFormat("en-IN").format(value);
+const fmt = (value?: number) => new Intl.NumberFormat("en-IN").format(value ?? 0);
 
 const DistrictChart = ({
   totals,
@@ -181,6 +181,27 @@ export default function HotspotsPage() {
   const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  const downloadCsv = (filename: string, rows: Array<Record<string, string | number | null | undefined>>) => {
+    const headers = rows.length ? Object.keys(rows[0]) : [];
+    const escape = (value: string | number | null | undefined) => {
+      if (value === null || value === undefined) return "";
+      const text = String(value).replace(/"/g, '""');
+      return `"${text}"`;
+    };
+    const csv = [
+      headers.join(","),
+      ...rows.map((row) => headers.map((header) => escape(row[header])).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const loadZones = useCallback(async () => {
     if (!token) return;
     try {
@@ -250,6 +271,23 @@ export default function HotspotsPage() {
 
   const districtAnalyticsMap = new Map(districtAnalytics.map((row) => [row.name, row]));
   const stationAnalyticsMap = new Map(stationAnalytics.map((row) => [row.name, row]));
+  const sortedDistrictTotals = [...districtTotals].sort((a, b) => b.crime_count - a.crime_count);
+  const stationTotalsSorted = [...stationTotals].sort((a, b) => b.crime_count - a.crime_count);
+  const topDistrictPreview = sortedDistrictTotals.slice(0, 6);
+  const topStationPreview = stationTotalsSorted.slice(0, 6);
+  const stationCsvRows = stationTotalsSorted.map((row) => ({
+    district: row.district_name || "",
+    station: row.name,
+    crimes: row.crime_count,
+    dominant_crime: stationAnalyticsMap.get(row.name)?.dominant_crime_type || "",
+    category: stationAnalyticsMap.get(row.name)?.dominant_category || "",
+  }));
+  const districtCsvRows = sortedDistrictTotals.map((row) => ({
+    district: row.name,
+    crimes: row.crime_count,
+    dominant_crime: districtAnalyticsMap.get(row.name)?.dominant_crime_type || "",
+    category: districtAnalyticsMap.get(row.name)?.dominant_category || "",
+  }));
 
   const loadDBSCAN = useCallback(async () => {
     const res = await fetchHotspots(token);
@@ -384,9 +422,7 @@ export default function HotspotsPage() {
   const selectedHotspot =
     hotspots.find((hotspot) => hotspot.clusterId === selectedHotspotId) || hotspots[0] || null;
   const totalVisibleIncidents = hotspots.reduce((sum, hotspot) => sum + hotspot.crimeCount, 0);
-  const dominantCrimeEntry = selectedHotspot
-    ? Object.entries(selectedHotspot.crimeDistribution || {}).sort((a, b) => Number(b[1]) - Number(a[1]))[0]
-    : null;
+  const hotspotCount = hotspots.length;
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6">
@@ -399,11 +435,8 @@ export default function HotspotsPage() {
             <h2 className="mt-2 text-[30px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
               Hotspot command map
             </h2>
-            <p className="mt-3 text-[15px] leading-7 text-[var(--fg-secondary)]">
-              The previously implemented map still needed work. The district fill was too flat,
-              the hotspot shapes looked approximate, and the visual hierarchy was not strong
-              enough for an operational view. This version uses clearer risk layering, better
-              district styling, and a more focused cluster inspection flow.
+            <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[var(--fg-secondary)]">
+              Fast read of cluster density, heat, and risk layers with a focused right-side drawer.
             </p>
           </div>
 
@@ -439,36 +472,38 @@ export default function HotspotsPage() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-6 grid gap-3 md:grid-cols-3 xl:grid-cols-4">
           {[
-            {
-              label: "Women safety layer",
-              active: showWomenSafety,
-              onClick: () => setShowWomenSafety((value) => !value),
-            },
-            {
-              label: "IRAD accident layer",
-              active: showAccidents,
-              onClick: () => setShowAccidents((value) => !value),
-            },
-            {
-              label: "District shading",
-              active: showDistrictShading,
-              onClick: () => setShowDistrictShading((value) => !value),
-            },
+            { label: "Hotspots", value: fmt(hotspotCount), tone: "text-[var(--accent-700)]" },
+            { label: "Visible incidents", value: fmt(totalVisibleIncidents), tone: "text-[var(--risk-high)]" },
+            { label: "Mode", value: mode === MODE_DBSCAN ? "Cluster map" : "Heatmap", tone: "text-[var(--fg-primary)]" },
           ].map((item) => (
-            <button
-              key={item.label}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                item.active
-                  ? "bg-[var(--accent-50)] text-[var(--accent-700)]"
-                  : "border bg-[var(--bg-surface)] text-[var(--fg-secondary)]"
-              }`}
-              onClick={item.onClick}
-            >
-              {item.label}
-            </button>
+            <div key={item.label} className="rounded-[20px] border bg-[var(--bg-surface)] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+                {item.label}
+              </p>
+              <p className={`mt-1 text-lg font-semibold ${item.tone}`}>{item.value}</p>
+            </div>
           ))}
+          <div className="flex flex-wrap gap-2 md:col-span-3 xl:col-span-1 xl:justify-end">
+            {[
+              { label: "Women safety", active: showWomenSafety, onClick: () => setShowWomenSafety((value) => !value) },
+              { label: "IRAD accidents", active: showAccidents, onClick: () => setShowAccidents((value) => !value) },
+              { label: "District shading", active: showDistrictShading, onClick: () => setShowDistrictShading((value) => !value) },
+            ].map((item) => (
+              <button
+                key={item.label}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  item.active
+                    ? "bg-[var(--accent-50)] text-[var(--accent-700)]"
+                    : "border bg-[var(--bg-surface)] text-[var(--fg-secondary)]"
+                }`}
+                onClick={item.onClick}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -530,113 +565,38 @@ export default function HotspotsPage() {
               selectedHotspotId={selectedHotspotId}
               onSelectHotspot={setSelectedHotspotId}
             />
+            <Drawer open={!!selectedHotspot} onClose={() => setSelectedHotspotId(null)} width="w-80">
+              <HotspotDetail
+                hotspot={selectedHotspot}
+                fmt={fmt}
+                onShowFirs={() => {
+                  /* TODO: wire to FIR listing */
+                }}
+                onDispatch={() => {
+                  /* TODO: dispatch action */
+                }}
+              />
+            </Drawer>
           </div>
         </div>
 
         <aside className="space-y-4">
           <div className="surface-card rounded-[28px] p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-[var(--fg-primary)]">
-              <ShieldAlert className="h-4 w-4 text-[var(--risk-high)]" />
-              Selected cluster
-            </div>
-            {selectedHotspot ? (
-              <div className="mt-4 space-y-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                    Cluster ID
-                  </p>
-                  <p className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
-                    {selectedHotspot.clusterId}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-[22px] border bg-[var(--bg-subtle)] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                      Incidents
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold text-[var(--fg-primary)]">
-                      {fmt(selectedHotspot.crimeCount)}
-                    </p>
-                  </div>
-                  <div className="rounded-[22px] border bg-[var(--bg-subtle)] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                      Dominant type
-                    </p>
-                    <p className="mt-2 text-sm font-semibold text-[var(--fg-primary)]">
-                      {dominantCrimeEntry?.[0] || "Unavailable"}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                    Crime mix
-                  </p>
-                  <div className="mt-3 space-y-3">
-                    {Object.entries(selectedHotspot.crimeDistribution || {})
-                      .sort((a, b) => Number(b[1]) - Number(a[1]))
-                      .slice(0, 4)
-                      .map(([crimeType, count]) => (
-                        <div key={crimeType}>
-                          <div className="mb-1 flex items-center justify-between text-sm">
-                            <span className="text-[var(--fg-secondary)]">{crimeType}</span>
-                            <span className="font-semibold text-[var(--fg-primary)]">{count}</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-[var(--bg-muted)]">
-                            <div
-                              className="h-full rounded-full bg-[var(--accent-500)]"
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  (Number(count) / Math.max(1, selectedHotspot.crimeCount)) * 100
-                                )}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-[var(--fg-secondary)]">
-                Select a hotspot on the map to inspect cluster detail.
-              </p>
-            )}
-          </div>
-
-          <div className="surface-card rounded-[28px] p-5">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--fg-primary)]">
               <Flame className="h-4 w-4 text-[var(--risk-medium)]" />
               Quick summary
             </div>
-            <div className="mt-4 space-y-4 text-sm text-[var(--fg-secondary)]">
-              <div className="rounded-[22px] border bg-[var(--bg-subtle)] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                  Visible incidents
-                </p>
-                <p className="mt-2 text-2xl font-semibold text-[var(--fg-primary)]">
-                  {fmt(totalVisibleIncidents)}
-                </p>
-              </div>
-              <div className="rounded-[22px] border bg-[var(--bg-subtle)] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                  Priority district
-                </p>
-                <p className="mt-2 text-lg font-semibold text-[var(--fg-primary)]">
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-[20px] border bg-[var(--bg-subtle)] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">Top district</p>
+                <p className="mt-2 text-base font-semibold text-[var(--fg-primary)]">
                   {districtTotals.slice().sort((a, b) => b.crime_count - a.crime_count)[0]?.name || "N/A"}
                 </p>
               </div>
-              <div className="rounded-[22px] border bg-[var(--risk-high-bg)] p-4 text-[var(--risk-high)]">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <AlertTriangle className="h-4 w-4" />
-                  Map review
-                </div>
-                <p className="mt-2 text-sm">
-                  The older implementation was functional, but it still needed design changes.
-                  The hotspot visualization and district choropleth were not yet strong enough for
-                  a polished command-dashboard experience.
+              <div className="rounded-[20px] border bg-[var(--bg-subtle)] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">Selected cluster</p>
+                <p className="mt-2 text-base font-semibold text-[var(--fg-primary)]">
+                  {selectedHotspot ? selectedHotspot.clusterId : "None"}
                 </p>
               </div>
             </div>
@@ -645,11 +605,10 @@ export default function HotspotsPage() {
           <div className="surface-card rounded-[28px] p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-[var(--fg-primary)]">
               <Siren className="h-4 w-4 text-[var(--accent-500)]" />
-              Suggested action
+              Next step
             </div>
-            <p className="mt-4 text-sm leading-6 text-[var(--fg-secondary)]">
-              Review the selected cluster, compare it with district totals below, and then use
-              the patrol and FIR modules to convert map insight into field action.
+            <p className="mt-3 text-sm leading-6 text-[var(--fg-secondary)]">
+              Click a cluster to inspect the drawer, then use the FIR and patrol actions.
             </p>
           </div>
         </aside>
@@ -722,12 +681,27 @@ export default function HotspotsPage() {
 
       <section className="grid gap-6 xl:grid-cols-2">
         <div className="surface-card rounded-[28px] p-5">
-          <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
-            Station-wise crime totals
-          </h3>
-          <div className="mt-4 overflow-x-auto">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+                Station-wise crime totals
+              </h3>
+              <p className="mt-1 text-sm text-[var(--fg-secondary)]">
+                Compact preview with a CSV download for the full station list.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => downloadCsv("station-wise-crime-totals.csv", stationCsvRows)}
+              className="inline-flex items-center gap-2 rounded-full border bg-[var(--bg-surface)] px-3 py-1 text-xs font-semibold text-[var(--accent-700)] transition hover:bg-[var(--accent-50)]"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+              View data
+            </button>
+          </div>
+          <div className="mt-4 overflow-hidden rounded-[22px] border min-h-[320px]">
             <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
+              <thead className="bg-[var(--bg-surface)] text-xs uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
                 <tr>
                   <th className="px-3 py-3">District</th>
                   <th className="px-3 py-3">Station</th>
@@ -737,39 +711,52 @@ export default function HotspotsPage() {
                 </tr>
               </thead>
               <tbody>
-                {stationTotals.length === 0 ? (
+                {topStationPreview.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-3 py-4 text-center text-[var(--fg-tertiary)]">
                       No station totals yet.
                     </td>
                   </tr>
                 ) : null}
-                {Object.entries(groupedStationTotals).map(([district, rows]) =>
-                  rows.map((row, index) => {
-                    const analytic = stationAnalyticsMap.get(row.name) || {};
-                    return (
-                      <tr key={`${district}-${row.name}`} className="border-t">
-                        <td className="px-3 py-3">{index === 0 ? district : ""}</td>
-                        <td className="px-3 py-3">{row.name}</td>
-                        <td className="px-3 py-3 font-semibold">{row.crime_count}</td>
-                        <td className="px-3 py-3">{analytic.dominant_crime_type || "-"}</td>
-                        <td className="px-3 py-3">{analytic.dominant_category || "-"}</td>
-                      </tr>
-                    );
-                  })
-                )}
+                {topStationPreview.map((row) => {
+                  const analytic: ZoneAnalyticsRow = stationAnalyticsMap.get(row.name) ?? { name: row.name };
+                  return (
+                    <tr key={row.name} className="border-t">
+                      <td className="px-3 py-3">{row.district_name || "-"}</td>
+                      <td className="px-3 py-3">{row.name}</td>
+                      <td className="px-3 py-3 font-semibold">{row.crime_count}</td>
+                      <td className="px-3 py-3">{analytic.dominant_crime_type || "-"}</td>
+                      <td className="px-3 py-3">{analytic.dominant_category || "-"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
         <div className="surface-card rounded-[28px] p-5">
-          <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
-            District-wise crime totals
-          </h3>
-          <div className="mt-4 overflow-x-auto">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+                District-wise crime totals
+              </h3>
+              <p className="mt-1 text-sm text-[var(--fg-secondary)]">
+                Compact preview with a CSV download for the full district list.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => downloadCsv("district-wise-crime-totals.csv", districtCsvRows)}
+              className="inline-flex items-center gap-2 rounded-full border bg-[var(--bg-surface)] px-3 py-1 text-xs font-semibold text-[var(--accent-700)] transition hover:bg-[var(--accent-50)]"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+              View data
+            </button>
+          </div>
+          <div className="mt-4 overflow-hidden rounded-[22px] border min-h-[320px]">
             <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
+              <thead className="bg-[var(--bg-surface)] text-xs uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
                 <tr>
                   <th className="px-3 py-3">District</th>
                   <th className="px-3 py-3">Crimes</th>
@@ -778,15 +765,15 @@ export default function HotspotsPage() {
                 </tr>
               </thead>
               <tbody>
-                {districtTotals.length === 0 ? (
+                {topDistrictPreview.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-3 py-4 text-center text-[var(--fg-tertiary)]">
                       No district totals yet.
                     </td>
                   </tr>
                 ) : null}
-                {districtTotals.map((row) => {
-                  const analytic = districtAnalyticsMap.get(row.name) || {};
+                {topDistrictPreview.map((row) => {
+                  const analytic: ZoneAnalyticsRow = districtAnalyticsMap.get(row.name) ?? { name: row.name };
                   return (
                     <tr key={row.name} className="border-t">
                       <td className="px-3 py-3">{row.name}</td>

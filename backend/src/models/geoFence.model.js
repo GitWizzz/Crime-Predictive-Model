@@ -4,18 +4,20 @@ const selectFields = `
   id,
   name,
   type,
-  ST_AsGeoJSON(boundary)::json AS boundary,
+  boundary,
+  bbox,
   alert_radius_m,
   notify_roles,
+  description,
   active,
   created_by,
   created_at
 `;
 
-export const createGeoFence = async ({ name, type, boundary, alert_radius_m, notify_roles, created_by }) => {
+export const createGeoFence = async ({ name, type, boundary, alert_radius_m, notify_roles, description, created_by }) => {
   const result = await pool.query(
-    `INSERT INTO geo_fences (name, type, boundary, alert_radius_m, notify_roles, created_by)
-     VALUES ($1, $2, ST_SetSRID(ST_GeomFromGeoJSON($3), 4326), $4, $5, $6)
+    `INSERT INTO geo_fences (name, type, boundary, alert_radius_m, notify_roles, description, created_by)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
      RETURNING ${selectFields}`,
     [
       name,
@@ -23,13 +25,14 @@ export const createGeoFence = async ({ name, type, boundary, alert_radius_m, not
       JSON.stringify(boundary),
       alert_radius_m || 500,
       notify_roles || ["ADMIN", "OFFICER"],
+      description || null,
       created_by || null,
     ]
   );
   return result.rows[0];
 };
 
-export const listGeoFences = async ({ type, active }) => {
+export const listGeoFences = async ({ type, active } = {}) => {
   const values = [];
   let paramIndex = 1;
   let filters = "";
@@ -53,15 +56,17 @@ export const listGeoFences = async ({ type, active }) => {
   return result.rows;
 };
 
-export const updateGeoFence = async ({ id, name, type, boundary, alert_radius_m, notify_roles, active }) => {
+export const updateGeoFence = async ({ id, name, type, boundary, alert_radius_m, notify_roles, description, active }) => {
   const result = await pool.query(
     `UPDATE geo_fences
      SET name = COALESCE($2, name),
          type = COALESCE($3, type),
-         boundary = CASE WHEN $4::text IS NULL THEN boundary ELSE ST_SetSRID(ST_GeomFromGeoJSON($4), 4326) END,
+         boundary = CASE WHEN $4::text IS NULL THEN boundary ELSE $4::jsonb END,
          alert_radius_m = COALESCE($5, alert_radius_m),
          notify_roles = COALESCE($6, notify_roles),
-         active = COALESCE($7, active)
+         description = COALESCE($7, description),
+         active = COALESCE($8, active),
+         updated_at = now()
      WHERE id = $1
      RETURNING ${selectFields}`,
     [
@@ -71,6 +76,7 @@ export const updateGeoFence = async ({ id, name, type, boundary, alert_radius_m,
       boundary ? JSON.stringify(boundary) : null,
       alert_radius_m || null,
       notify_roles || null,
+      description || null,
       typeof active === "boolean" ? active : null,
     ]
   );
@@ -80,7 +86,7 @@ export const updateGeoFence = async ({ id, name, type, boundary, alert_radius_m,
 export const deleteGeoFence = async (id) => {
   const result = await pool.query(
     `UPDATE geo_fences
-     SET active = false
+     SET active = false, updated_at = now()
      WHERE id = $1
      RETURNING ${selectFields}`,
     [id]

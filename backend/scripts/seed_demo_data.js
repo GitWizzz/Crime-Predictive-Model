@@ -193,7 +193,7 @@ const main = async () => {
       dt.setDate(dt.getDate() - Math.floor(rand(0, 60)));
       await client.query(
         `INSERT INTO irad_accidents
-         (accident_id, date_time, severity, location, road_name, district, description, source)
+         (accident_id, occurred_at, severity, location, road_name, district, description, source)
          VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, 'IRAD')
          ON CONFLICT (accident_id) DO NOTHING`,
         [

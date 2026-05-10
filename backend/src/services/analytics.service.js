@@ -9,6 +9,8 @@ import {
   getZoneComparison,
   getHeatmapTimelineBuckets,
   getFIRExportRows,
+  getOfficerLeaderboard,
+  getStationDistrictCrimeTotals,
 } from "../models/analytics.model.js";
 import { clusterIncidents, forecastSeries, kdeHotspots, riskScore } from "./ml.service.js";
 
@@ -178,6 +180,10 @@ export const runRiskScoring = async (filters) => {
   }
 };
 
+export const fetchOfficerLeaderboard = async (filters) => {
+  return await getOfficerLeaderboard(filters);
+};
+
 export const compareZones = async (filters) => {
   return await getZoneComparison(filters);
 };
@@ -206,4 +212,8 @@ export const exportFIRsCsv = async (filters) => {
     headers.join(","),
     ...rows.map((row) => headers.map((header) => escape(row[header])).join(",")),
   ].join("\n");
+};
+
+export const fetchStationDistrictCrimeTotals = async (filters) => {
+  return await getStationDistrictCrimeTotals(filters);
 };

@@ -32,7 +32,7 @@ Three services each have their own environment file. Keep them separate — neve
 | `DB_PORT` | No | `5432` | Database server port |
 | `DB_USER` | Yes* | — | Database username |
 | `DB_PASSWORD` | Yes* | — | Database password |
-| `DB_NAME` | Yes* | `crime_db` | Database name |
+| `DB_NAME` | Yes* | `crime_hotspot_db` | Database name |
 | `DB_SSL` | No | `false` | Set to `true` for managed cloud databases (e.g. Render, Supabase) |
 | `DB_POOL_MAX` | No | `20` | Maximum simultaneous DB connections |
 | `DB_POOL_MIN` | No | `2` | Minimum idle DB connections kept alive |
@@ -42,7 +42,7 @@ Three services each have their own environment file. Keep them separate — neve
 
 **Example:**
 ```env
-DATABASE_URL=postgresql://crimemap:s3cur3p4ss@localhost:5432/crime_db
+DATABASE_URL=postgresql://crimemap:s3cur3p4ss@localhost:5432/crime_hotspot_db
 DB_SSL=false
 DB_POOL_MAX=20
 DB_POOL_MIN=2

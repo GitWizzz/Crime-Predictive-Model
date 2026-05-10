@@ -61,6 +61,13 @@ const summarizeDistribution = (distribution?: Record<string, number>) =>
 const isCoordinatePair = (coords: unknown): coords is [number, number] =>
   Array.isArray(coords) && typeof coords[0] === "number" && typeof coords[1] === "number";
 
+const toLatLng = (coordinates: unknown): [number, number] | null => {
+  if (!isCoordinatePair(coordinates)) return null;
+  const [lon, lat] = coordinates;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return [lat, lon];
+};
+
 const getGeoBounds = (geo: GeoJsonObject | null | undefined): [[number, number], [number, number]] | null => {
   if (!geo) return null;
 
@@ -85,11 +92,11 @@ const getGeoBounds = (geo: GeoJsonObject | null | undefined): [[number, number],
   };
 
   if (geo.type === "FeatureCollection") {
-    (geo as MapFeatureCollection).features.forEach((feature) => visit(feature.geometry?.coordinates));
+    (geo as MapFeatureCollection).features.forEach((feature) => visit((feature.geometry as { coordinates?: unknown })?.coordinates));
   } else if (geo.type === "Feature") {
-    visit((geo as MapFeature).geometry?.coordinates);
+    visit(((geo as MapFeature).geometry as { coordinates?: unknown })?.coordinates);
   } else {
-    visit((geo as Geometry).coordinates);
+    visit((geo as { coordinates?: unknown }).coordinates);
   }
 
   if (minLat > maxLat || minLon > maxLon) return null;
@@ -100,7 +107,7 @@ const getGeoBounds = (geo: GeoJsonObject | null | undefined): [[number, number],
 };
 
 const featureCenter = (feature: MapFeature): [number, number] | null => {
-  const coords = feature?.geometry?.coordinates;
+  const coords = (feature?.geometry as { coordinates?: unknown })?.coordinates;
   if (!coords) return null;
   if (feature.geometry.type === "Point") {
     const point = coords as [number, number];
@@ -219,22 +226,29 @@ export default function HotspotsMap({
       .filter((item: { center: [number, number] | null }) => Array.isArray(item.center));
   }, [stations]);
 
-  const maxCount = useMemo(
-    () => Math.max(...hotspots.map((hotspot) => hotspot.crimeCount), 0),
+  const validHotspots = useMemo(
+    () =>
+      hotspots.filter((hotspot) => {
+        const center = toLatLng(hotspot?.centroid?.coordinates);
+        return Array.isArray(center);
+      }),
     [hotspots]
   );
 
+  const maxCount = useMemo(
+    () => Math.max(...validHotspots.map((hotspot) => hotspot.crimeCount), 0),
+    [validHotspots]
+  );
+
   const selectedHotspot = useMemo(
-    () => hotspots.find((hotspot) => hotspot.clusterId === selectedHotspotId) || null,
-    [hotspots, selectedHotspotId]
+    () => validHotspots.find((hotspot) => hotspot.clusterId === selectedHotspotId) || null,
+    [validHotspots, selectedHotspotId]
   );
 
   const center: [number, number] =
-    selectedHotspot?.centroid?.coordinates
-      ? [selectedHotspot.centroid.coordinates[1], selectedHotspot.centroid.coordinates[0]]
-      : hotspots[0]?.centroid?.coordinates
-        ? [hotspots[0].centroid.coordinates[1], hotspots[0].centroid.coordinates[0]]
-        : BIHAR_CENTER;
+    toLatLng(selectedHotspot?.centroid?.coordinates) ||
+    toLatLng(validHotspots[0]?.centroid?.coordinates) ||
+    BIHAR_CENTER;
 
   useEffect(() => {
     document.body.style.overflow = isFullscreen ? "hidden" : "";
@@ -326,11 +340,9 @@ export default function HotspotsMap({
         ))}
 
         {mode === "dbscan" || mode === "both"
-          ? hotspots.map((hotspot) => {
-              const centerPoint: [number, number] = [
-                hotspot.centroid.coordinates[1],
-                hotspot.centroid.coordinates[0],
-              ];
+          ? validHotspots.map((hotspot) => {
+              const centerPoint = toLatLng(hotspot.centroid.coordinates);
+              if (!centerPoint) return null;
               const tone = getRiskTone(hotspot.crimeCount, maxCount);
               const selected = hotspot.clusterId === selectedHotspotId;
               const radius = Math.max(350, Math.min(1800, hotspot.crimeCount * 18));
@@ -375,11 +387,14 @@ export default function HotspotsMap({
           : null}
 
         {mode === "dbscan" || mode === "both"
-          ? hotspots.map((hotspot) => {
-              const centerPoint: [number, number] = [
-                hotspot.centroid.coordinates[1],
-                hotspot.centroid.coordinates[0],
-              ];
+          ? validHotspots.map((hotspot) => {
+              const lat = hotspot.centroid.coordinates[1];
+              const lon = hotspot.centroid.coordinates[0];
+              
+              // Skip if coordinates are invalid
+              if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+              
+              const centerPoint: [number, number] = [lat, lon];
               const tone = getRiskTone(hotspot.crimeCount, maxCount);
               const selected = hotspot.clusterId === selectedHotspotId;
 

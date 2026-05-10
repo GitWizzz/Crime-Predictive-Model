@@ -9,6 +9,8 @@ import {
   compareZones,
   buildHeatmapTimeline,
   exportFIRsCsv,
+  fetchOfficerLeaderboard,
+  fetchStationDistrictCrimeTotals,
 } from "../services/analytics.service.js";
 
 export const getZoneAnalyticsHandler = async (req, res) => {
@@ -74,10 +76,26 @@ export const getForecastHandler = async (req, res) => {
 export const postBehavioralHandler = async (req, res) => {
   try {
     const result = await runBehavioralClustering(req.body || {});
+    const clusterClusters = result.clusters?.clusters || [];
+    const memberToCluster = new Map();
+    for (const cluster of clusterClusters) {
+      for (const memberId of cluster.member_ids || []) {
+        memberToCluster.set(memberId, cluster.cluster_id);
+      }
+    }
+    const points = (result.incidents || [])
+      .filter((i) => i.latitude != null && i.longitude != null)
+      .map((i) => ({
+        id: i.id,
+        x: Number(i.longitude),
+        y: Number(i.latitude),
+        label: i.crime_type || "Unknown",
+        cluster_id: memberToCluster.get(i.id) || null,
+      }));
     return res.status(200).json({
       success: true,
       message: "Behavioral clustering completed",
-      data: result,
+      data: { clusters: result.clusters, points },
     });
   } catch (error) {
     return res.status(500).json({
@@ -109,10 +127,15 @@ export const getRiskHandler = async (req, res) => {
   try {
     const { type, startDate, endDate, fromDate, toDate } = req.query;
     const result = await runRiskScoring({ type, startDate: startDate || fromDate, endDate: endDate || toDate });
+    const scoreMap = new Map((result.scores || []).map((s) => [s.id, s.score]));
+    const items = (result.items || []).map((item) => ({
+      ...item,
+      score: scoreMap.has(item.id) ? scoreMap.get(item.id) : 0,
+    }));
     return res.status(200).json({
       success: true,
       message: "Risk scores generated successfully",
-      data: result,
+      data: { items },
     });
   } catch (error) {
     return res.status(500).json({
@@ -174,6 +197,28 @@ export const getHeatmapTimelineHandler = async (req, res) => {
   }
 };
 
+export const getOfficerLeaderboardHandler = async (req, res) => {
+  try {
+    const { startDate, endDate, fromDate, toDate, limit } = req.query;
+    const rows = await fetchOfficerLeaderboard({
+      startDate: startDate || fromDate,
+      endDate: endDate || toDate,
+      limit: limit ? parseInt(limit, 10) : 5,
+    });
+    return res.status(200).json({
+      success: true,
+      message: "Officer leaderboard retrieved successfully",
+      data: rows,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+      data: null,
+    });
+  }
+};
+
 export const exportCsvHandler = async (req, res) => {
   try {
     const csv = await exportFIRsCsv(req.query);
@@ -188,3 +233,26 @@ export const exportCsvHandler = async (req, res) => {
     });
   }
 };
+
+
+export const getStationDistrictCrimeTotalsHandler = async (req, res) => {
+  try {
+    const { startDate, endDate, fromDate, toDate } = req.query;
+    const data = await fetchStationDistrictCrimeTotals({
+      startDate: startDate || fromDate,
+      endDate: endDate || toDate,
+    });
+    return res.status(200).json({
+      success: true,
+      message: "Station and district crime totals retrieved successfully",
+      data,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+      data: null,
+    });
+  }
+};
+

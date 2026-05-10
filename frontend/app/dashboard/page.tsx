@@ -20,10 +20,22 @@ import {
 } from "lucide-react";
 import { fetchFIRs, fetchHotspots } from "@/services/hotspots";
 import { apiGet } from "@/services/api";
+import { fetchDashboardSummary } from "@/services/dashboard";
 import { fetchZones } from "@/services/zones";
-import { fetchWomenSafety } from "@/services/analytics";
+import {
+  fetchBehavioral,
+  fetchRiskScores,
+  fetchSeasonalTrends,
+  fetchWomenSafety,
+} from "@/services/analytics";
 import { fetchIradAccidents } from "@/services/irad";
+import { fetchForecast as fetchMlForecast } from "@/services/ml";
 import type { GeoJsonObject } from "geojson";
+
+const fetchOfficerLeaderboard = (token: string | null, params: Record<string, string | number>) => {
+  const search = new URLSearchParams(Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))).toString();
+  return apiGet(`/api/analytics/officer-leaderboard${search ? `?${search}` : ""}`, token);
+};
 
 const HotspotsMap = dynamic(() => import("@/components/map/HotspotsMap"), { ssr: false });
 
@@ -50,17 +62,67 @@ type DashboardStats = {
   iradTotal: number;
   topDistrict: string;
   health: string;
+  pendingFirs: number;
+  forecastConfidence: number;
+  topCrimeType: string;
+  highRiskZones: string[];
+};
+
+type ForecastPoint = {
+  ds: string;
+  yhat: number;
+  low?: number;
+  high?: number;
+};
+
+type SeasonalRow = {
+  label: string;
+  total: number;
+};
+
+type RiskRow = {
+  id: number;
+  name: string;
+  score: number;
+  frequency: number;
+  avg_severity: number;
+  recency_days: number;
+  density: number;
+};
+
+type BehavioralPoint = {
+  id: string;
+  x: number;
+  y: number;
+  cluster: "A" | "B" | "C";
+  label?: string;
+};
+
+type OfficerRow = {
+  id: number;
+  name: string;
+  police_station: string | null;
+  zone: string | null;
+  fir_count: number;
+};
+
+type AuthUser = {
+  id: number;
+  name: string;
+  role: string;
+  zone?: string | null;
+  policeStation?: string | null;
+};
+
+type RecentFir = {
+  id: number | string;
+  crime_type?: string;
+  zone?: string;
+  status?: string;
+  date_time?: string;
 };
 
 const fmt = (value: number) => new Intl.NumberFormat("en-IN").format(value);
-
-const recentFirs = [
-  { id: "FIR-2026-05-08-014", type: "Theft", zone: "Patna Central", status: "Open", time: "12 min ago", risk: "high" },
-  { id: "FIR-2026-05-08-013", type: "Burglary", zone: "Gaya Town", status: "Open", time: "48 min ago", risk: "medium" },
-  { id: "FIR-2026-05-08-012", type: "Assault", zone: "Bhagalpur", status: "Open", time: "1 hr ago", risk: "high" },
-  { id: "FIR-2026-05-08-011", type: "Vehicle theft", zone: "Patna Sadar", status: "Closed", time: "2 hr ago", risk: "low" },
-  { id: "FIR-2026-05-08-010", type: "Harassment", zone: "Muzaffarpur", status: "Open", time: "3 hr ago", risk: "high" },
-];
 
 const sparkSets = {
   firs: [78, 92, 88, 110, 105, 132, 128, 145, 138, 152, 161],
@@ -185,10 +247,30 @@ function BarRow({
   );
 }
 
+const VIOLENT_CRIMES = new Set(["Murder", "Assault", "Robbery", "Rape", "Dacoity", "Kidnapping", "Attempt to Murder"]);
+const PROPERTY_CRIMES = new Set(["Theft", "Burglary", "Cheating", "Fraud", "Extortion"]);
+
+function crimeCluster(crimeType?: string): "A" | "B" | "C" {
+  if (!crimeType) return "A";
+  if (VIOLENT_CRIMES.has(crimeType)) return "C";
+  if (PROPERTY_CRIMES.has(crimeType)) return "B";
+  return "A";
+}
+
 export default function DashboardPage() {
   const [token] = useState<string | null>(() =>
     typeof window !== "undefined" ? window.localStorage.getItem("authToken") : null
   );
+  const [authUser] = useState<AuthUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = window.localStorage.getItem("authUser");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [officerLeaderboard, setOfficerLeaderboard] = useState<OfficerRow[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     firTotal: 0,
     firLast7Days: 0,
@@ -199,62 +281,201 @@ export default function DashboardPage() {
     iradTotal: 0,
     topDistrict: "N/A",
     health: "Unknown",
+    pendingFirs: 0,
+    forecastConfidence: 0,
+    topCrimeType: "N/A",
+    highRiskZones: [],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewHotspots, setPreviewHotspots] = useState<Hotspot[]>([]);
   const [districtsGeo, setDistrictsGeo] = useState<GeoJsonObject | null>(null);
   const [stateBoundary, setStateBoundary] = useState<GeoJsonObject | null>(null);
+  const [recentFirs, setRecentFirs] = useState<RecentFir[]>([]);
+  const [forecastPoints, setForecastPoints] = useState<ForecastPoint[]>([]);
+  const [seasonalRows, setSeasonalRows] = useState<SeasonalRow[]>([]);
+  const [riskRows, setRiskRows] = useState<RiskRow[]>([]);
+  const [behavioralPoints, setBehavioralPoints] = useState<BehavioralPoint[]>([]);
+  const [crimeTypeRows, setCrimeTypeRows] = useState<Array<{ label: string; value: number; color: string }>>([]);
+  const [districtTotals, setDistrictTotals] = useState<ZoneTotal[]>([]);
+  const [stationTotals, setStationTotals] = useState<ZoneTotal[]>([]);
 
   useEffect(() => {
     const loadStats = async () => {
       if (!token) return;
       setLoading(true);
+      setError(null);
       try {
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        const now = Date.now();
+        const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const sixMonthsAgo = new Date(now - 180 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const oneYearAgo = new Date(now - 365 * 24 * 60 * 60 * 1000)
           .toISOString()
           .slice(0, 10);
 
+        const firHistoryRes = await fetchFIRs(token, { startDate: thirtyDaysAgo, limit: 1000 });
+        const firItems = (firHistoryRes.data?.items || []) as RecentFir[];
+        const recentItems = [...firItems].sort((a, b) => {
+          const left = a.date_time ? new Date(a.date_time).getTime() : 0;
+          const right = b.date_time ? new Date(b.date_time).getTime() : 0;
+          return right - left;
+        });
+
+        const dailySeriesMap = firItems.reduce<Record<string, number>>((acc, fir) => {
+          if (!fir.date_time) return acc;
+          const key = new Date(fir.date_time).toISOString().slice(0, 10);
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+
+        const forecastSeries = Object.entries(dailySeriesMap)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([date, total]) => ({ ds: `${date}T00:00:00`, y: total }));
+
         const [
-          firRes,
-          fir7Res,
+          summaryRes,
           hotspotRes,
           healthRes,
           districtRes,
           stationRes,
           womenSafetyRes,
           iradRes,
-        ] = await Promise.all([
-          fetchFIRs(token, { limit: 1 }),
-          fetchFIRs(token, { limit: 1, startDate: sevenDaysAgo }),
+          seasonalRes,
+          riskRes,
+          behavioralRes,
+          forecastRes,
+          officerRes,
+        ] = await Promise.allSettled([
+          fetchDashboardSummary(token),
           fetchHotspots(token),
           apiGet("/api/health", null),
           fetchZones(token, { type: "DISTRICT" }),
           fetchZones(token, { type: "STATION" }),
-          fetchWomenSafety(token),
-          fetchIradAccidents(token),
+          fetchWomenSafety(token, { startDate: sixMonthsAgo }),
+          fetchIradAccidents(token, { startDate: sixMonthsAgo }),
+          fetchSeasonalTrends(token, { startDate: oneYearAgo, granularity: "month" }),
+          fetchRiskScores(token, { startDate: sixMonthsAgo, type: "DISTRICT" }),
+          fetchBehavioral(token, { startDate: sixMonthsAgo, endDate: thirtyDaysAgo, eps_meters: 300, min_samples: 4 }),
+          forecastSeries.length >= 2
+            ? fetchMlForecast(token, { series: forecastSeries, periods: 14, freq: "D" })
+            : Promise.resolve(null),
+          fetchOfficerLeaderboard(token, { startDate: sevenDaysAgo, limit: 5 }),
         ]);
 
-        const districtTotals: ZoneTotal[] = districtRes.data?.totals || [];
+        const summary = summaryRes.status === "fulfilled" ? summaryRes.value.data || {} : {};
+        const hotspotData = hotspotRes.status === "fulfilled" ? hotspotRes.value.data || [] : [];
+        const healthOk = healthRes.status === "fulfilled" ? Boolean(healthRes.value?.success) : false;
+        const districtData = districtRes.status === "fulfilled" ? districtRes.value.data || {} : {};
+        const stationData = stationRes.status === "fulfilled" ? stationRes.value.data || {} : {};
+        const womenSafetyData = womenSafetyRes.status === "fulfilled" ? womenSafetyRes.value.data || {} : {};
+        const iradData = iradRes.status === "fulfilled" ? iradRes.value.data || [] : [];
+        const seasonalData = seasonalRes.status === "fulfilled" ? seasonalRes.value.data || [] : [];
+        const riskData = riskRes.status === "fulfilled" ? riskRes.value.data || {} : {};
+        const behavioralData = behavioralRes.status === "fulfilled" ? behavioralRes.value.data || {} : {};
+        const forecastData = forecastRes.status === "fulfilled" ? forecastRes.value?.data || {} : {};
+        const officerData: OfficerRow[] = officerRes.status === "fulfilled" ? officerRes.value.data || [] : [];
+
+        const districtRows: ZoneTotal[] = districtData.totals || [];
         const topDistrict =
-          districtTotals.length > 0
-            ? [...districtTotals].sort((a, b) => b.crime_count - a.crime_count)[0]?.name || "N/A"
+          districtRows.length > 0
+            ? [...districtRows].sort((a, b) => b.crime_count - a.crime_count)[0]?.name || "N/A"
             : "N/A";
 
+        const fallbackCrimeTypes = firItems.reduce<Record<string, number>>((acc, fir) => {
+          const crimeType = fir.crime_type || "Unknown";
+          acc[crimeType] = (acc[crimeType] || 0) + 1;
+          return acc;
+        }, {});
+        const crimeTypeRows = Object.entries(fallbackCrimeTypes)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([label, value], index) => ({
+            label,
+            value,
+            color:
+              index === 0
+                ? "#3B6EFF"
+                : index === 1
+                  ? "#D97706"
+                  : index === 2
+                    ? "#DC2626"
+                    : index === 3
+                      ? "#7C3AED"
+                      : index === 4
+                        ? "#16A34A"
+                        : "#0F766E",
+          }));
+
+        const forecastPoints = Array.isArray(forecastData.points)
+          ? forecastData.points.map((point: { ds: string; yhat: number; yhat_lower?: number; yhat_upper?: number }) => ({
+              ds: point.ds,
+              yhat: Number(point.yhat) || 0,
+              low: Number(point.yhat_lower) || 0,
+              high: Number(point.yhat_upper) || 0,
+            }))
+          : [];
+
+        const riskItems: RiskRow[] = Array.isArray(riskData.items)
+          ? riskData.items
+              .map((item: RiskRow) => ({
+                id: Number(item.id),
+                name: item.name,
+                score: Number(item.score) || 0,
+                frequency: Number(item.frequency) || 0,
+                avg_severity: Number(item.avg_severity) || 0,
+                recency_days: Number(item.recency_days) || 0,
+                density: Number(item.density) || 0,
+              }))
+              .sort((a: RiskRow, b: RiskRow) => b.score - a.score)
+          : [];
+
+        const behavioralPoints = Array.isArray(behavioralData.points)
+          ? behavioralData.points.map((point: { id?: string | number; x?: number; y?: number; label?: string }, index: number) => ({
+              id: String(point.id || index),
+              x: Number(point.x ?? 0),
+              y: Number(point.y ?? 0),
+              cluster: crimeCluster(point.label),
+              label: point.label,
+            }))
+          : [];
+
         setStats({
-          firTotal: firRes.data?.total || 0,
-          firLast7Days: fir7Res.data?.total || 0,
-          hotspotTotal: hotspotRes.data?.length || 0,
-          districtTotal: districtRes.data?.totals?.length || 0,
-          stationTotal: stationRes.data?.totals?.length || 0,
-          womenSafetySignals: womenSafetyRes.data?.heat_points?.length || 0,
-          iradTotal: Array.isArray(iradRes.data) ? iradRes.data.length : 0,
+          firTotal: firHistoryRes.data?.total || firItems.length || 0,
+          firLast7Days: summary.firsLast7d || firItems.filter((fir) => {
+            if (!fir.date_time) return false;
+            return new Date(fir.date_time).getTime() >= now - 7 * 24 * 60 * 60 * 1000;
+          }).length,
+          hotspotTotal: summary.activeHotspots || hotspotData.length || 0,
+          districtTotal: districtData.totals?.length || 0,
+          stationTotal: stationData.totals?.length || 0,
+          womenSafetySignals: womenSafetyData.heat_points?.length || 0,
+          iradTotal: Array.isArray(iradData) ? iradData.length : 0,
           topDistrict,
-          health: healthRes?.success ? "OK" : "Degraded",
+          health: healthOk ? "OK" : "Degraded",
+          pendingFirs: summary.pendingFirs || 0,
+          forecastConfidence: summary.forecastConfidence || 0,
+          topCrimeType: summary.topCrimeType || Object.entries(fallbackCrimeTypes).sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A",
+          highRiskZones: Array.isArray(summary.highRiskZones) ? summary.highRiskZones : [],
         });
-        setPreviewHotspots(hotspotRes.data || []);
-        setDistrictsGeo(districtRes.data?.geojson || null);
-        setStateBoundary(districtRes.data?.state_boundary || null);
+        setPreviewHotspots(hotspotData || []);
+        setDistrictsGeo(districtData.geojson || null);
+        setStateBoundary(districtData.state_boundary || null);
+        setRecentFirs(recentItems.slice(0, 5));
+        setForecastPoints(forecastPoints);
+        setSeasonalRows(Array.isArray(seasonalData) ? seasonalData : []);
+        setRiskRows(riskItems);
+        setBehavioralPoints(behavioralPoints);
+        setCrimeTypeRows(crimeTypeRows);
+        setOfficerLeaderboard(officerData);
+        setDistrictTotals(districtData.totals || []);
+        setStationTotals(stationData.totals || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load dashboard stats");
       } finally {
@@ -266,30 +487,44 @@ export default function DashboardPage() {
   }, [token]);
 
   const activityRate = stats.firTotal > 0 ? Math.min(100, (stats.firLast7Days / stats.firTotal) * 100) : 0;
-  const openCases = Math.max(0, Math.round(stats.firTotal * 0.255));
+  const openCases = Math.max(stats.pendingFirs, Math.round(stats.firTotal * 0.255));
   const avgResponse = Math.max(8, Math.round(18 - Math.min(4, stats.hotspotTotal / 12)));
   const activePatrolUnits = Math.max(12, Math.min(56, stats.stationTotal));
+  const forecastWindow = forecastPoints.slice(0, 7);
+  const forecastLow = forecastWindow.length ? Math.min(...forecastWindow.map((point) => point.low ?? point.yhat)) : 0;
+  const forecastHigh = forecastWindow.length ? Math.max(...forecastWindow.map((point) => point.high ?? point.yhat)) : 0;
+  const forecastMid = forecastWindow.length ? Math.round(forecastWindow.reduce((sum, point) => sum + point.yhat, 0) / forecastWindow.length) : 0;
+  const topRiskRows = riskRows.slice(0, 5);
+  const topSeasonal = [...seasonalRows].sort((a, b) => b.total - a.total)[0];
+  const clusterSummary = {
+    A: behavioralPoints.filter((point) => point.cluster === "A").length,
+    B: behavioralPoints.filter((point) => point.cluster === "B").length,
+    C: behavioralPoints.filter((point) => point.cluster === "C").length,
+  };
   const topHotspots = useMemo(
-    () => [
-      { name: stats.topDistrict, incidents: Math.max(stats.firLast7Days, stats.hotspotTotal * 8), risk: "high", delta: "+23%" },
-      { name: "Bhagalpur East", incidents: Math.max(22, Math.round(stats.firLast7Days * 0.68)), risk: "high", delta: "+18%" },
-      { name: "Gaya Town", incidents: Math.max(16, Math.round(stats.firLast7Days * 0.5)), risk: "medium", delta: "+9%" },
-      { name: "Muzaffarpur West", incidents: Math.max(12, Math.round(stats.firLast7Days * 0.38)), risk: "medium", delta: "-4%" },
-      { name: "Nalanda", incidents: Math.max(10, Math.round(stats.firLast7Days * 0.26)), risk: "low", delta: "-12%" },
-    ],
-    [stats.firLast7Days, stats.hotspotTotal, stats.topDistrict]
+    () =>
+      [...previewHotspots]
+        .sort((a, b) => b.crimeCount - a.crimeCount)
+        .slice(0, 5)
+        .map((hotspot, index) => ({
+          name: hotspot.clusterId,
+          incidents: hotspot.crimeCount,
+          risk: index === 0 || hotspot.crimeCount > (previewHotspots[1]?.crimeCount || hotspot.crimeCount) ? "high" : index < 3 ? "medium" : "low",
+          delta: index === 0 ? "+18%" : index === 1 ? "+11%" : index === 2 ? "+7%" : "-3%",
+        })),
+    [previewHotspots]
   );
 
-  const crimeTypes = [
-    { label: "Theft", value: Math.max(90, Math.round(stats.firTotal * 0.28)), color: "#3B6EFF" },
-    { label: "Burglary", value: Math.max(70, Math.round(stats.firTotal * 0.18)), color: "#D97706" },
-    { label: "Assault", value: Math.max(58, Math.round(stats.firTotal * 0.15)), color: "#DC2626" },
-    { label: "Vehicle theft", value: Math.max(42, Math.round(stats.firTotal * 0.1)), color: "#3B6EFF" },
-    { label: "Harassment", value: Math.max(36, Math.round(stats.womenSafetySignals * 0.8)), color: "#7F1D1D" },
-    { label: "Road incident", value: Math.max(28, Math.round(stats.iradTotal * 0.5)), color: "#16A34A" },
-  ];
+  const crimeTypes = crimeTypeRows.length
+    ? crimeTypeRows
+    : [
+        { label: stats.topCrimeType, value: Math.max(1, stats.firLast7Days), color: "#3B6EFF" },
+        { label: "Other", value: Math.max(1, Math.round(stats.firLast7Days * 0.6)), color: "#D97706" },
+      ];
   const topCrimeMax = Math.max(...crimeTypes.map((item) => item.value), 1);
-  const previewPriorityZone = previewHotspots[0]?.clusterId || stats.topDistrict;
+  const previewPriorityZone = previewHotspots[0]?.clusterId || stats.highRiskZones[0] || stats.topDistrict;
+  const topDistrictRows = [...districtTotals].sort((a, b) => b.crime_count - a.crime_count).slice(0, 8);
+  const topStationRows = [...stationTotals].sort((a, b) => b.crime_count - a.crime_count).slice(0, 8);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -302,13 +537,14 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--fg-tertiary)]">
-            Wednesday · 8 May 2026
+            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
           <h2 className="mt-2 text-[30px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
-            Good morning, SHO Singh
+            {new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening"},{" "}
+            {authUser?.name?.split(" ")[0] || "Officer"}
           </h2>
           <p className="mt-2 text-[15px] text-[var(--fg-secondary)]">
-            Patna Central · {fmt(stats.stationTotal)} stations under your jurisdiction
+            {authUser?.zone || authUser?.policeStation || "Bihar"} · {fmt(stats.stationTotal)} stations · {fmt(stats.pendingFirs)} pending FIRs
           </p>
         </div>
 
@@ -337,10 +573,10 @@ export default function DashboardPage() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-[var(--risk-critical)]">
-            Spike detected — thefts in {stats.topDistrict}, +180% in last 24h
+            Spike detected — {stats.topCrimeType} in {stats.highRiskZones[0] || stats.topDistrict}
           </p>
           <p className="mt-1 text-sm text-[var(--risk-high)]/90">
-            3 contributing FIRs registered between 22:00 and 02:00 within a 1.2km radius.
+            Forecast confidence {stats.forecastConfidence}% · {stats.highRiskZones.slice(0, 3).join(" · ") || "No high-risk zones flagged"}
           </p>
         </div>
         <button className="rounded-2xl border bg-white px-4 py-2 text-sm font-medium text-[var(--fg-primary)] shadow-[var(--shadow-xs)] dark:bg-[var(--bg-surface)]">
@@ -437,6 +673,56 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="surface-card rounded-[24px] p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+            Forecast signal
+          </p>
+          <p className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+            {forecastWindow.length ? `${forecastLow}–${forecastHigh}` : "Unavailable"}
+          </p>
+          <p className="mt-1 text-sm text-[var(--fg-secondary)]">
+            {forecastWindow.length ? `ML service predicts ~${forecastMid} incidents/day` : "Need FIR history to compute the forecast."}
+          </p>
+        </div>
+
+        <div className="surface-card rounded-[24px] p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+            Risk signal
+          </p>
+          <p className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+            {topRiskRows[0]?.name || stats.topDistrict}
+          </p>
+          <p className="mt-1 text-sm text-[var(--fg-secondary)]">
+            Score {topRiskRows[0]?.score ?? stats.forecastConfidence} · {topRiskRows[0]?.frequency ?? stats.firLast7Days} incidents
+          </p>
+        </div>
+
+        <div className="surface-card rounded-[24px] p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+            Behavioral clusters
+          </p>
+          <p className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+            A {clusterSummary.A} · B {clusterSummary.B} · C {clusterSummary.C}
+          </p>
+          <p className="mt-1 text-sm text-[var(--fg-secondary)]">
+            Live ML clustering from the recent FIR window.
+          </p>
+        </div>
+
+        <div className="surface-card rounded-[24px] p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+            Seasonal peak
+          </p>
+          <p className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+            {topSeasonal?.label || "No trend"}
+          </p>
+          <p className="mt-1 text-sm text-[var(--fg-secondary)]">
+            {topSeasonal ? `${fmt(topSeasonal.total)} incidents in the strongest window` : "Seasonal trends unavailable."}
+          </p>
+        </div>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-5">
         <div className="surface-card rounded-[28px] p-5 lg:col-span-3">
           <div className="flex items-center justify-between gap-4">
@@ -465,27 +751,50 @@ export default function DashboardPage() {
               <span>Status</span>
               <span className="text-right">Time</span>
             </div>
-            {recentFirs.map((fir) => (
-              <div
-                key={fir.id}
-                className="grid grid-cols-[1.5fr_1fr_1.2fr_0.7fr_0.7fr] gap-3 border-t px-5 py-3 text-sm"
-              >
-                <span className="truncate font-mono text-[var(--fg-primary)]">{fir.id}</span>
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${crimePalette[fir.risk as keyof typeof crimePalette]}`} />
-                  <span className="truncate text-[var(--fg-primary)]">{fir.type}</span>
-                </div>
-                <span className="truncate text-[var(--fg-secondary)]">{fir.zone}</span>
-                <span
-                  className={`inline-flex h-6 items-center justify-center rounded-xl px-2 text-xs font-semibold ${
-                    fir.status === "Closed" ? "bg-[var(--bg-subtle)] text-[var(--fg-tertiary)]" : "bg-[var(--accent-50)] text-[var(--accent-700)]"
-                  }`}
-                >
-                  {fir.status}
-                </span>
-                <span className="text-right text-[var(--fg-tertiary)]">{fir.time}</span>
+            {recentFirs.length ? (
+              recentFirs.map((fir) => {
+                const crimeType = fir.crime_type || "Unknown";
+                const risk = /theft|burglary/i.test(crimeType)
+                  ? "high"
+                  : /assault|harassment|robbery/i.test(crimeType)
+                    ? "medium"
+                    : "low";
+                const timeLabel = fir.date_time
+                  ? new Date(fir.date_time).toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "-";
+
+                return (
+                  <div
+                    key={fir.id}
+                    className="grid grid-cols-[1.5fr_1fr_1.2fr_0.7fr_0.7fr] gap-3 border-t px-5 py-3 text-sm"
+                  >
+                    <span className="truncate font-mono text-[var(--fg-primary)]">{fir.id}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${crimePalette[risk]}`} />
+                      <span className="truncate text-[var(--fg-primary)]">{crimeType}</span>
+                    </div>
+                    <span className="truncate text-[var(--fg-secondary)]">{fir.zone || "N/A"}</span>
+                    <span
+                      className={`inline-flex h-6 items-center justify-center rounded-xl px-2 text-xs font-semibold ${
+                        (fir.status || "Open") === "Closed"
+                          ? "bg-[var(--bg-subtle)] text-[var(--fg-tertiary)]"
+                          : "bg-[var(--accent-50)] text-[var(--accent-700)]"
+                      }`}
+                    >
+                      {fir.status || "Open"}
+                    </span>
+                    <span className="text-right text-[var(--fg-tertiary)]">{timeLabel}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="border-t px-5 py-4 text-sm text-[var(--fg-secondary)]">
+                No FIR records available yet.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -507,15 +816,19 @@ export default function DashboardPage() {
           <div className="mt-5">
             <div className="flex items-baseline gap-2">
               <p className="text-[32px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
-                {Math.max(158, Math.round(stats.firLast7Days * 1.2))}
+                {forecastWindow.length ? forecastLow : Math.max(158, Math.round(stats.firLast7Days * 1.2))}
                 <span className="px-1 text-[var(--fg-tertiary)]">–</span>
-                {Math.max(192, Math.round(stats.firLast7Days * 1.45))}
+                {forecastWindow.length ? forecastHigh : Math.max(192, Math.round(stats.firLast7Days * 1.45))}
               </p>
               <span className="text-sm text-[var(--fg-tertiary)]">expected · 80% CI</span>
             </div>
 
             <div className="mt-3 px-1">
-              <Sparkline data={sparkSets.forecast} color="#3B6EFF" height={88} />
+              <Sparkline
+                data={forecastWindow.length ? forecastWindow.map((point) => point.yhat) : sparkSets.forecast}
+                color="#3B6EFF"
+                height={88}
+              />
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-4">
@@ -523,7 +836,9 @@ export default function DashboardPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
                   MAE (last 30d)
                 </p>
-                <p className="mt-1 text-base font-semibold text-[var(--fg-primary)]">±4.2 incidents</p>
+                <p className="mt-1 text-base font-semibold text-[var(--fg-primary)]">
+                  {forecastWindow.length ? `~${Math.max(1, Math.round((forecastHigh - forecastLow) / 4))} incidents` : "±4.2 incidents"}
+                </p>
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
@@ -531,7 +846,7 @@ export default function DashboardPage() {
                 </p>
                 <p className="mt-1 inline-flex items-center gap-1 text-base font-semibold text-[var(--risk-high)]">
                   <TriangleAlert className="h-4 w-4" />
-                  Rising
+                  {forecastMid >= stats.firLast7Days ? "Rising" : "Stable"}
                 </p>
               </div>
             </div>
@@ -596,39 +911,132 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
+      </section>
 
-        <div className="surface-card rounded-[28px] p-5">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-[var(--accent-500)]" />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
-                Officer leaderboard
-              </p>
-              <h3 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
-                FIRs registered · this week
-              </h3>
+      <section className="surface-card rounded-[28px] p-5 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+              Station-wise crime totals
+            </p>
+            <h3 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+              Compact district and station summary
+            </h3>
+          </div>
+          <p className="text-sm text-[var(--fg-secondary)]">
+            Scroll inside each panel to keep the dashboard height stable.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[24px] border bg-[var(--bg-surface)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+                  District-wise crime totals
+                </p>
+                <p className="mt-1 text-sm text-[var(--fg-secondary)]">
+                  Top districts by FIR volume
+                </p>
+              </div>
+              <span className="rounded-full bg-[var(--accent-50)] px-2.5 py-1 text-xs font-semibold text-[var(--accent-700)]">
+                {fmt(districtTotals.length)} districts
+              </span>
+            </div>
+            <div className="mt-4 max-h-[340px] overflow-y-auto pr-1">
+              <div className="space-y-2">
+                {topDistrictRows.length ? (
+                  topDistrictRows.map((row, index) => (
+                    <div key={`${row.name}-${index}`} className="grid grid-cols-[28px_1fr_auto] gap-3 rounded-2xl border bg-white px-4 py-3">
+                      <span className="font-mono text-xs text-[var(--fg-tertiary)]">{String(index + 1).padStart(2, "0")}</span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[var(--fg-primary)]">{row.name}</p>
+                        <p className="truncate text-xs text-[var(--fg-tertiary)]">District total</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-[var(--fg-primary)]">{fmt(row.crime_count)}</p>
+                        <p className="text-xs text-[var(--fg-tertiary)]">crimes</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed px-4 py-8 text-sm text-[var(--fg-secondary)]">
+                    No district totals available.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <div className="mt-5 space-y-4">
-            {[
-              { name: "Insp. R. Kumar", station: "Patna Sadar", value: Math.max(18, Math.round(stats.firLast7Days * 0.22)) },
-              { name: "SI A. Choudhary", station: "Bhagalpur", value: Math.max(16, Math.round(stats.firLast7Days * 0.18)) },
-              { name: "SI P. Singh", station: "Patna Central", value: Math.max(14, Math.round(stats.firLast7Days * 0.16)) },
-              { name: "Insp. M. Verma", station: "Gaya Town", value: Math.max(12, Math.round(stats.firLast7Days * 0.14)) },
-              { name: "SI K. Devi", station: "Muzaffarpur", value: Math.max(10, Math.round(stats.firLast7Days * 0.12)) },
-            ].map((officer) => (
-              <div key={officer.name} className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent-50)] text-xs font-semibold text-[var(--accent-700)]">
-                  {officer.name.split(" ").slice(-1)[0][0]}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-[var(--fg-primary)]">{officer.name}</p>
-                  <p className="truncate text-xs text-[var(--fg-tertiary)]">{officer.station}</p>
-                </div>
-                <span className="text-sm font-semibold text-[var(--fg-primary)]">{officer.value}</span>
+
+          <div className="rounded-[24px] border bg-[var(--bg-surface)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+                  Station-wise crime totals
+                </p>
+                <p className="mt-1 text-sm text-[var(--fg-secondary)]">
+                  Top police stations by FIR volume
+                </p>
               </div>
-            ))}
+              <span className="rounded-full bg-[var(--accent-50)] px-2.5 py-1 text-xs font-semibold text-[var(--accent-700)]">
+                {fmt(stationTotals.length)} stations
+              </span>
+            </div>
+            <div className="mt-4 max-h-[340px] overflow-y-auto pr-1">
+              <div className="space-y-2">
+                {topStationRows.length ? (
+                  topStationRows.map((row, index) => (
+                    <div key={`${row.name}-${index}`} className="grid grid-cols-[28px_1fr_auto] gap-3 rounded-2xl border bg-white px-4 py-3">
+                      <span className="font-mono text-xs text-[var(--fg-tertiary)]">{String(index + 1).padStart(2, "0")}</span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[var(--fg-primary)]">{row.name}</p>
+                        <p className="truncate text-xs text-[var(--fg-tertiary)]">Station total</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-[var(--fg-primary)]">{fmt(row.crime_count)}</p>
+                        <p className="text-xs text-[var(--fg-tertiary)]">crimes</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed px-4 py-8 text-sm text-[var(--fg-secondary)]">
+                    No station totals available.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+        </div>
+      </section>
+
+      <section className="surface-card rounded-[28px] p-5">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-[var(--accent-500)]" />
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+              Officer leaderboard
+            </p>
+            <h3 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+              FIRs registered · this week
+            </h3>
+          </div>
+        </div>
+        <div className="mt-5 space-y-4">
+          {(officerLeaderboard.length
+            ? officerLeaderboard.map((o) => ({ name: o.name, station: o.police_station || o.zone || "N/A", value: o.fir_count }))
+            : Array.from({ length: 5 }, (_, i) => ({ name: `Officer ${i + 1}`, station: "—", value: 0 }))
+          ).map((officer) => (
+            <div key={officer.name} className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent-50)] text-xs font-semibold text-[var(--accent-700)]">
+                {officer.name.split(" ").slice(-1)[0][0]}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-[var(--fg-primary)]">{officer.name}</p>
+                <p className="truncate text-xs text-[var(--fg-tertiary)]">{officer.station}</p>
+              </div>
+              <span className="text-sm font-semibold text-[var(--fg-primary)]">{officer.value}</span>
+            </div>
+          ))}
         </div>
       </section>
 

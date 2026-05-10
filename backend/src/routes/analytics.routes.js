@@ -23,6 +23,8 @@ import {
   getCompareHandler,
   getHeatmapTimelineHandler,
   exportCsvHandler,
+  getOfficerLeaderboardHandler,
+  getStationDistrictCrimeTotalsHandler,
 } from "../controllers/analytics.controller.js";
 
 const router = express.Router();
@@ -37,5 +39,8 @@ router.get("/heatmap-timeline", protect, validateQuery(heatmapTimelineQuerySchem
 router.get("/women-safety/firs", protect, validateQuery(womenSafetyQuerySchema), getWomenSafetyFIRsHandler);
 router.get("/women-safety", protect, validateQuery(womenSafetyQuerySchema), getWomenSafetyHandler);
 router.get("/risk", protect, validateQuery(riskQuerySchema), getRiskHandler);
+router.get("/officer-leaderboard", protect, getOfficerLeaderboardHandler);
+router.get("/station-district-totals", protect, getStationDistrictCrimeTotalsHandler);
 
 export default router;
+

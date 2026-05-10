@@ -31,6 +31,17 @@ export default function Topbar() {
     const saved = window.localStorage.getItem("theme");
     return saved === "light" ? "light" : "dark";
   });
+  const [userZone, setUserZone] = useState("Bihar Police");
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("authUser");
+      if (raw) {
+        const u = JSON.parse(raw);
+        setUserZone(u.zone || u.police_station || u.policeStation || "Bihar Police");
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -58,7 +69,7 @@ export default function Topbar() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-[var(--fg-tertiary)]">
-            <span>Patna Central</span>
+            <span>{userZone}</span>
             <ChevronRight className="h-3.5 w-3.5" />
             <span>{title.eyebrow}</span>
           </div>
