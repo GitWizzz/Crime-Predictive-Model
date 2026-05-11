@@ -7,10 +7,10 @@ dotenv.config();
 const { Client } = pkg;
 
 const client = new Client({
-  host: process.env.DB_HOST || "localhost",
+  host: process.env.DB_HOST || "crime-postgres",
   port: Number(process.env.DB_PORT || 5432),
   user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD,
+  password: process.env.DB_PASSWORD || "postgres",
   database: process.env.DB_NAME || "crime_hotspot_db",
 });
 
