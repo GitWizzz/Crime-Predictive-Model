@@ -28,24 +28,22 @@ exports.up = (pgm) => {
   pgm.sql(`DROP INDEX IF EXISTS irad_location_gix;`);
 
   // ---------------------------------------------------------------------------
-  // TABLE: users — add missing columns
+  // TABLE: users — add missing columns (using raw SQL for IF NOT EXISTS safety)
   // ---------------------------------------------------------------------------
-  pgm.addColumns("users", {
-    failed_login_attempts: { type: "integer", notNull: true, default: 0 },
-    locked_until:          { type: "timestamp with time zone" },
-    last_failed_login:     { type: "timestamp with time zone" },
-    is_active:             { type: "boolean", notNull: true, default: true },
-    last_login_at:         { type: "timestamp with time zone" },
-    fcm_token:             { type: "text" },           // FCM push token for mobile app
-    fcm_token_updated_at:  { type: "timestamp with time zone" },
-    police_station:        { type: "varchar(100)" },   // Officer's home station
-    zone:                  { type: "varchar(100)" },   // Officer's assigned zone
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("now()"),
-    },
-  });
+  pgm.sql(`
+    ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS failed_login_attempts integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS locked_until timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS last_failed_login timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS last_login_at timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS fcm_token text,
+      ADD COLUMN IF NOT EXISTS fcm_token_updated_at timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS police_station varchar(100),
+      ADD COLUMN IF NOT EXISTS zone varchar(100),
+      ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone NOT NULL DEFAULT now();
+  `);
+
   pgm.createIndex("users", "is_active",      { name: "idx_users_is_active" });
   pgm.createIndex("users", "role",           { name: "idx_users_role" });
   pgm.createIndex("users", "police_station", { name: "idx_users_police_station" });
