@@ -287,7 +287,7 @@ exports.up = (pgm) => {
       EXTRACT(DOW FROM f.occurred_at)::INT AS day_of_week,
       EXTRACT(HOUR FROM f.occurred_at)::INT AS hour_of_day,
       f.zone, f.police_station, f.location_name,
-      (f.location->>'lat')::float AS latitude, (f.location->>'lon')::float AS longitude,
+      ST_Y(f.location::geometry) AS latitude, ST_X(f.location::geometry) AS longitude,
       f.victim_gender, f.victim_age, f.victim_count, f.status, f.source,
       f.registered_by, u.name AS registered_by_name
     FROM firs f
