@@ -158,16 +158,16 @@ function StatCard({
   suffix?: string;
 }) {
   return (
-    <div className="surface-card dashboard-kpi rounded-[24px] p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
+    <div className="surface-card dashboard-kpi min-w-0 rounded-[24px] p-5">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
           {label}
         </p>
-        <Info className="h-4 w-4 text-[var(--fg-tertiary)]" />
+        <Info className="h-4 w-4 shrink-0 text-[var(--fg-tertiary)]" />
       </div>
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <div className="flex items-baseline gap-2">
-          <p className="text-[34px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
+      <div className="mt-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <p className="min-w-0 break-words text-[34px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
             {value}
           </p>
           {suffix ? <span className="pb-1 text-sm text-[var(--fg-tertiary)]">{suffix}</span> : null}
@@ -237,7 +237,7 @@ function BarRow({
   color?: string;
 }) {
   return (
-    <div className="grid grid-cols-[120px_1fr_auto] items-center gap-3">
+    <div className="grid min-w-0 grid-cols-[minmax(80px,120px)_minmax(0,1fr)_auto] items-center gap-3">
       <div className="truncate text-[12.5px] text-[var(--fg-secondary)]">{label}</div>
       <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-subtle)]">
         <div className="h-full rounded-full" style={{ width: `${Math.max(2, (value / max) * 100)}%`, background: color }} />
@@ -297,8 +297,8 @@ export default function DashboardPage() {
   const [riskRows, setRiskRows] = useState<RiskRow[]>([]);
   const [behavioralPoints, setBehavioralPoints] = useState<BehavioralPoint[]>([]);
   const [crimeTypeRows, setCrimeTypeRows] = useState<Array<{ label: string; value: number; color: string }>>([]);
-  const [districtTotals, setDistrictTotals] = useState<ZoneTotal[]>([]);
-  const [stationTotals, setStationTotals] = useState<ZoneTotal[]>([]);
+  const [, setDistrictTotals] = useState<ZoneTotal[]>([]);
+  const [, setStationTotals] = useState<ZoneTotal[]>([]);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -523,32 +523,29 @@ export default function DashboardPage() {
       ];
   const topCrimeMax = Math.max(...crimeTypes.map((item) => item.value), 1);
   const previewPriorityZone = previewHotspots[0]?.clusterId || stats.highRiskZones[0] || stats.topDistrict;
-  const topDistrictRows = [...districtTotals].sort((a, b) => b.crime_count - a.crime_count).slice(0, 8);
-  const topStationRows = [...stationTotals].sort((a, b) => b.crime_count - a.crime_count).slice(0, 8);
-
   return (
-    <div className="mx-auto max-w-[1440px] space-y-6">
+    <div className="mx-auto max-w-[1440px] space-y-6 overflow-hidden">
       {error ? (
         <div className="rounded-[22px] border border-[var(--risk-high)]/20 bg-[var(--risk-high-bg)] p-4 text-sm text-[var(--risk-high)]">
           {error}
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end justify-between gap-6">
-        <div>
+      <div className="flex min-w-0 flex-wrap items-end justify-between gap-6">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--fg-tertiary)]">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
-          <h2 className="mt-2 text-[30px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
+          <h2 className="mt-2 break-words text-[30px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
             {new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening"},{" "}
             {authUser?.name?.split(" ")[0] || "Officer"}
           </h2>
-          <p className="mt-2 text-[15px] text-[var(--fg-secondary)]">
+          <p className="mt-2 break-words text-[15px] text-[var(--fg-secondary)]">
             {authUser?.zone || authUser?.policeStation || "Bihar"} · {fmt(stats.stationTotal)} stations · {fmt(stats.pendingFirs)} pending FIRs
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <button className="inline-flex items-center gap-2 rounded-2xl border bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--fg-secondary)] shadow-[var(--shadow-xs)]">
             <CalendarDays className="h-4 w-4" />
             Last 7 days
@@ -567,15 +564,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <section className="flex items-center gap-3 rounded-[24px] border border-[var(--risk-high)]/20 bg-[var(--risk-high-bg)] px-4 py-4">
+      <section className="flex min-w-0 flex-wrap items-center gap-3 rounded-[24px] border border-[var(--risk-high)]/20 bg-[var(--risk-high-bg)] px-4 py-4">
         <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-[var(--risk-high)]/20 bg-white text-[var(--risk-high)] dark:bg-[var(--bg-surface)]">
           <Zap className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[var(--risk-critical)]">
+          <p className="break-words text-sm font-semibold text-[var(--risk-critical)]">
             Spike detected — {stats.topCrimeType} in {stats.highRiskZones[0] || stats.topDistrict}
           </p>
-          <p className="mt-1 text-sm text-[var(--risk-high)]/90">
+          <p className="mt-1 break-words text-sm text-[var(--risk-high)]/90">
             Forecast confidence {stats.forecastConfidence}% · {stats.highRiskZones.slice(0, 3).join(" · ") || "No high-risk zones flagged"}
           </p>
         </div>
@@ -625,17 +622,17 @@ export default function DashboardPage() {
         />
       </section>
 
-      <section className="surface-card rounded-[28px] p-5 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
+      <section className="surface-card min-w-0 rounded-[28px] p-5 md:p-6">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
               Hotspot map · your zone
             </p>
-            <h3 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+            <h3 className="mt-2 break-words text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
               DBSCAN clusters + KDE heat · last 7 days
             </h3>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex max-w-full flex-wrap items-center gap-2">
             <button className="inline-flex items-center gap-2 rounded-2xl border bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--fg-secondary)] shadow-[var(--shadow-xs)]">
               <Layers3 className="h-4 w-4" />
               Layers
@@ -666,7 +663,7 @@ export default function DashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
             Priority zone
           </p>
-          <p className="mt-1 text-lg font-semibold text-[var(--fg-primary)]">{previewPriorityZone}</p>
+          <p className="mt-1 break-words text-lg font-semibold text-[var(--fg-primary)]">{previewPriorityZone}</p>
           <p className="mt-1 text-sm text-[var(--fg-secondary)]">
             Live hotspot preview from the current DBSCAN layer for your dashboard summary.
           </p>
@@ -674,11 +671,11 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="surface-card rounded-[24px] p-5">
+        <div className="surface-card min-w-0 rounded-[24px] p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
             Forecast signal
           </p>
-          <p className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+          <p className="mt-2 break-words text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
             {forecastWindow.length ? `${forecastLow}–${forecastHigh}` : "Unavailable"}
           </p>
           <p className="mt-1 text-sm text-[var(--fg-secondary)]">
@@ -686,11 +683,11 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="surface-card rounded-[24px] p-5">
+        <div className="surface-card min-w-0 rounded-[24px] p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
             Risk signal
           </p>
-          <p className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+          <p className="mt-2 break-words text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
             {topRiskRows[0]?.name || stats.topDistrict}
           </p>
           <p className="mt-1 text-sm text-[var(--fg-secondary)]">
@@ -698,11 +695,11 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="surface-card rounded-[24px] p-5">
+        <div className="surface-card min-w-0 rounded-[24px] p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
             Behavioral clusters
           </p>
-          <p className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+          <p className="mt-2 break-words text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
             A {clusterSummary.A} · B {clusterSummary.B} · C {clusterSummary.C}
           </p>
           <p className="mt-1 text-sm text-[var(--fg-secondary)]">
@@ -710,11 +707,11 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="surface-card rounded-[24px] p-5">
+        <div className="surface-card min-w-0 rounded-[24px] p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
             Seasonal peak
           </p>
-          <p className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+          <p className="mt-2 break-words text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
             {topSeasonal?.label || "No trend"}
           </p>
           <p className="mt-1 text-sm text-[var(--fg-secondary)]">
@@ -724,13 +721,13 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-5">
-        <div className="surface-card rounded-[28px] p-5 lg:col-span-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+        <div className="surface-card min-w-0 rounded-[28px] p-5 lg:col-span-3">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
                 Recent FIRs
               </p>
-              <h3 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+              <h3 className="mt-2 break-words text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
                 5 most recent across your jurisdiction
               </h3>
             </div>
@@ -743,9 +740,9 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-[20px] border border-[var(--border-default)]">
+          <div className="mt-5 overflow-x-auto rounded-[20px] border border-[var(--border-default)]">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_1.5fr_1.2fr_1.5fr_1fr] gap-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
+            <div className="grid min-w-[680px] grid-cols-[1fr_1.5fr_1.2fr_1.5fr_1fr] gap-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fg-tertiary)]">
               <span className="py-1">FIR no</span>
               <span className="py-1">Type</span>
               <span className="py-1">Zone</span>
@@ -771,7 +768,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={fir.id}
-                    className="grid grid-cols-[1fr_1.5fr_1.2fr_1.5fr_1fr] gap-0 border-b border-[var(--border-default)] px-6 py-4 text-sm items-center hover:bg-[var(--bg-subtle)] transition"
+                    className="grid min-w-[680px] grid-cols-[1fr_1.5fr_1.2fr_1.5fr_1fr] items-center gap-0 border-b border-[var(--border-default)] px-6 py-4 text-sm transition hover:bg-[var(--bg-subtle)]"
                   >
                     <span className="truncate font-mono font-medium text-[var(--fg-primary)]">{fir.id}</span>
                     <div className="flex items-center gap-2 min-w-0">
@@ -802,13 +799,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="surface-card rounded-[28px] p-5 lg:col-span-2">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+        <div className="surface-card min-w-0 rounded-[28px] p-5 lg:col-span-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
                 Next 7 days · forecast
               </p>
-              <h3 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+              <h3 className="mt-2 break-words text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
                 Theft incidents · Patna zone
               </h3>
             </div>
@@ -818,8 +815,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-5">
-            <div className="flex items-baseline gap-2">
-              <p className="text-[32px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-2">
+              <p className="break-words text-[32px] font-semibold tracking-[-0.03em] text-[var(--fg-primary)]">
                 {forecastWindow.length ? forecastLow : Math.max(158, Math.round(stats.firLast7Days * 1.2))}
                 <span className="px-1 text-[var(--fg-tertiary)]">–</span>
                 {forecastWindow.length ? forecastHigh : Math.max(192, Math.round(stats.firLast7Days * 1.45))}
@@ -864,7 +861,7 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <div className="surface-card rounded-[28px] p-5">
+        <div className="surface-card min-w-0 rounded-[28px] p-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
               Top crime types
@@ -886,7 +883,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="surface-card rounded-[28px] p-5">
+        <div className="surface-card min-w-0 rounded-[28px] p-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
               Top hotspots
@@ -897,7 +894,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-5 divide-y">
             {topHotspots.map((hotspot, index) => (
-              <div key={hotspot.name} className="grid grid-cols-[28px_1fr_auto_auto] items-center gap-3 py-3">
+              <div key={hotspot.name} className="grid min-w-0 grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-3 py-3">
                 <span className="font-mono text-xs text-[var(--fg-tertiary)]">
                   {String(index + 1).padStart(2, "0")}
                 </span>
@@ -921,35 +918,35 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="surface-card rounded-[28px] p-5">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+        <div className="surface-card min-w-0 rounded-[28px] p-5">
+          <div className="flex min-w-0 items-center justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
                 Officer activity
               </p>
-              <h3 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+              <h3 className="mt-2 break-words text-xl font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
                 Top FIR filers · 7 days
               </h3>
             </div>
           </div>
-          <div className="mt-5 divide-y divide-(--border-default)">
+          <div className="mt-5 divide-y divide-[var(--border-default)]">
             {officerLeaderboard.length ? officerLeaderboard.map((officer, index) => (
-              <div key={officer.id} className="grid grid-cols-[28px_1fr_auto] items-center gap-3 py-3">
-                <span className="font-mono text-xs text-(--fg-tertiary)">
+              <div key={officer.id} className="grid min-w-0 grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 py-3">
+                <span className="font-mono text-xs text-[var(--fg-tertiary)]">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-(--fg-primary)">{officer.name}</p>
-                  <p className="truncate text-[11px] text-(--fg-tertiary)">{officer.police_station || officer.zone || "—"}</p>
+                  <p className="truncate text-sm font-medium text-[var(--fg-primary)]">{officer.name}</p>
+                  <p className="truncate text-[11px] text-[var(--fg-tertiary)]">{officer.police_station || officer.zone || "-"}</p>
                 </div>
-                <span className={`rounded-xl px-2.5 py-1 text-xs font-semibold ${
+                <span className={`whitespace-nowrap rounded-xl px-2.5 py-1 text-xs font-semibold ${
                   index === 0 ? "risk-badge-high" : index < 3 ? "risk-badge-medium" : "risk-badge-low"
                 }`}>
                   {officer.fir_count} FIRs
                 </span>
               </div>
             )) : (
-              <p className="py-6 text-center text-sm text-(--fg-tertiary)">No officer data yet.</p>
+              <p className="py-6 text-center text-sm text-[var(--fg-tertiary)]">No officer data yet.</p>
             )}
           </div>
         </div>

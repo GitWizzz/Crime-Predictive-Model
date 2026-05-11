@@ -14,7 +14,10 @@ export type GeoFence = {
   type: string;
   boundary: GeoJsonObject | null;
   alert_radius_m: number;
+  notify_roles: string[];
+  description: string | null;
   active: boolean;
+  created_at: string;
 };
 
 type Props = {

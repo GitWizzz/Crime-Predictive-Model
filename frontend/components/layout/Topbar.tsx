@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Bell, CalendarDays, ChevronRight, LogOut, Moon, Plus, Sparkles, Sun } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { normalizeRole } from "@/lib/rbac";
 
 const PAGE_TITLES: Record<string, { title: string; eyebrow: string }> = {
   "/dashboard": { title: "Dashboard", eyebrow: "Operations overview" },
@@ -31,17 +32,21 @@ export default function Topbar() {
     const saved = window.localStorage.getItem("theme");
     return saved === "light" ? "light" : "dark";
   });
-  const [userZone, setUserZone] = useState("Bihar Police");
-
-  useEffect(() => {
+  const [userMeta] = useState(() => {
+    const fallback = { zone: "Bihar Police", role: "OFFICER" };
+    if (typeof window === "undefined") return fallback;
     try {
       const raw = window.localStorage.getItem("authUser");
       if (raw) {
         const u = JSON.parse(raw);
-        setUserZone(u.zone || u.police_station || u.policeStation || "Bihar Police");
+        return {
+          zone: u.zone || u.police_station || u.policeStation || "Bihar Police",
+          role: normalizeRole(u.role),
+        };
       }
     } catch {}
-  }, []);
+    return fallback;
+  });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -64,31 +69,31 @@ export default function Topbar() {
 
   return (
     <header className="border-b border-[var(--border-default)] bg-[var(--bg-surface)]/80 px-5 py-3.5 backdrop-blur-xl md:px-7">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-xs text-[var(--fg-tertiary)]">
-            <span>{userZone}</span>
+            <span>{userMeta.zone}</span>
             <ChevronRight className="h-3 w-3" />
             <span>{title.eyebrow}</span>
           </div>
-          <h1 className="mt-0.5 text-[24px] font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
+          <h1 className="mt-0.5 truncate text-[24px] font-semibold tracking-[-0.02em] text-[var(--fg-primary)]">
             {title.title}
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="hidden items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--fg-secondary)] shadow-(--shadow-xs) md:flex">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
+          <div className="hidden items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--fg-secondary)] shadow-[var(--shadow-xs)] md:flex">
             <CalendarDays className="h-4 w-4 text-[var(--accent-500)]" />
             <span>Last 7 days</span>
           </div>
 
-          <button className="flex items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm font-medium text-[var(--fg-secondary)] shadow-(--shadow-xs) hover:bg-[var(--bg-subtle)] hover:text-[var(--fg-primary)]">
+          <button className="flex items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm font-medium text-[var(--fg-secondary)] shadow-[var(--shadow-xs)] hover:bg-[var(--bg-subtle)] hover:text-[var(--fg-primary)]">
             <Sparkles className="h-4 w-4 text-[var(--accent-500)]" />
             Brief
           </button>
 
           <button
-            className="flex items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm font-medium text-[var(--fg-secondary)] shadow-(--shadow-xs) hover:bg-[var(--bg-subtle)] hover:text-[var(--fg-primary)]"
+            className="flex items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm font-medium text-[var(--fg-secondary)] shadow-[var(--shadow-xs)] hover:bg-[var(--bg-subtle)] hover:text-[var(--fg-primary)]"
             onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
             aria-label="Toggle dark and light mode"
             type="button"
@@ -97,17 +102,19 @@ export default function Topbar() {
             {theme === "dark" ? "Light" : "Dark"}
           </button>
 
-          <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-secondary)] shadow-(--shadow-xs) hover:bg-[var(--bg-subtle)] hover:text-[var(--fg-primary)]">
+          <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-secondary)] shadow-[var(--shadow-xs)] hover:bg-[var(--bg-subtle)] hover:text-[var(--fg-primary)]">
             <Bell className="h-4 w-4" />
           </button>
 
-          <Link
-            href="/dashboard/firs?compose=1"
-            className="flex items-center gap-2 rounded-lg bg-[var(--accent-500)] px-3.5 py-2 text-sm font-semibold text-white shadow-(--shadow-sm) hover:bg-[var(--accent-600)]"
-          >
-            <Plus className="h-4 w-4" />
-            Register FIR
-          </Link>
+          {userMeta.role !== "ANALYST" && (
+            <Link
+              href="/dashboard/firs?compose=1"
+              className="flex items-center gap-2 rounded-lg bg-[var(--accent-500)] px-3.5 py-2 text-sm font-semibold text-white shadow-[var(--shadow-sm)] hover:bg-[var(--accent-600)]"
+            >
+              <Plus className="h-4 w-4" />
+              Register FIR
+            </Link>
+          )}
 
           <button
             className="flex items-center gap-2 rounded-lg border border-[var(--risk-high)]/20 bg-[var(--risk-high-bg)] px-3 py-2 text-sm font-medium text-[var(--risk-high)] hover:opacity-90"

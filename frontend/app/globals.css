@@ -294,3 +294,43 @@
   .hotspot-popup-row      { display: flex; justify-content: space-between; gap: 8px; color: var(--fg-primary); font-size: 12px; }
 
 }
+
+@keyframes hotspotPulse {
+  0%, 100% {
+    opacity: 0.34;
+    transform: translate(-50%, -50%) scale(0.82);
+  }
+  50% {
+    opacity: 0.82;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+
+@keyframes radarPing {
+  0% {
+    opacity: 0.72;
+    transform: translate(-50%, -50%) scale(0.58);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.28);
+  }
+}
+
+@keyframes scanLine {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(520%);
+  }
+}
+
+@keyframes blink {
+  0%, 45% {
+    opacity: 1;
+  }
+  46%, 100% {
+    opacity: 0.28;
+  }
+}

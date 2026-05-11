@@ -19,33 +19,34 @@ import {
   Waypoints,
   ScrollText,
 } from "lucide-react";
+import { normalizeRole, rolesForRoute, type UserRole } from "@/lib/rbac";
 
-type NavItem = { label: string; href: string; icon: React.ElementType; roles?: string[] };
-type NavGroup = { title: string; items: NavItem[]; roles?: string[] };
+type NavItem = { label: string; href: string; icon: React.ElementType; roles?: UserRole[] };
+type NavGroup = { title: string; items: NavItem[]; roles?: UserRole[] };
 
 const navGroups: NavGroup[] = [
   {
     title: "Operational",
     items: [
       { label: "Dashboard",    href: "/dashboard",              icon: Home        },
-      { label: "Hotspots",     href: "/dashboard/hotspots",     icon: Map         },
-      { label: "FIRs",         href: "/dashboard/firs",         icon: FileText    },
+      { label: "Hotspots",     href: "/dashboard/hotspots",     icon: Map,        roles: rolesForRoute("/dashboard/hotspots") },
+      { label: "FIRs",         href: "/dashboard/firs",         icon: FileText,   roles: rolesForRoute("/dashboard/firs") },
     ],
   },
   {
     title: "Analytical",
     items: [
-      { label: "Analytics",    href: "/dashboard/analytics",    icon: ChartColumn },
-      { label: "Patrol",       href: "/dashboard/patrols",      icon: Car         },
+      { label: "Analytics",    href: "/dashboard/analytics",    icon: ChartColumn, roles: rolesForRoute("/dashboard/analytics") },
+      { label: "Patrol",       href: "/dashboard/patrols",      icon: Car,         roles: rolesForRoute("/dashboard/patrols") },
     ],
   },
   {
     title: "Specialised",
     items: [
-      { label: "Road Safety",  href: "/dashboard/irad",         icon: TrafficCone },
-      { label: "Women Safety", href: "/dashboard/women-safety", icon: ShieldAlert },
-      { label: "Geo-Fences",  href: "/dashboard/geo-fences",   icon: Waypoints   },
-      { label: "Reports",      href: "/dashboard/reports",      icon: ScrollText  },
+      { label: "Road Safety",  href: "/dashboard/irad",         icon: TrafficCone, roles: rolesForRoute("/dashboard/irad") },
+      { label: "Women Safety", href: "/dashboard/women-safety", icon: ShieldAlert, roles: rolesForRoute("/dashboard/women-safety") },
+      { label: "Geo-Fences",   href: "/dashboard/geo-fences",   icon: Waypoints,   roles: rolesForRoute("/dashboard/geo-fences") },
+      { label: "Reports",      href: "/dashboard/reports",      icon: ScrollText,  roles: rolesForRoute("/dashboard/reports") },
     ],
   },
   {
@@ -91,8 +92,9 @@ export default function Sidebar() {
     .toUpperCase();
   const station = user?.police_station || user?.policeStation || user?.zone || "Bihar Police";
   const roleLabel = user?.role
-    ? user.role.charAt(0) + user.role.slice(1).toLowerCase()
+    ? normalizeRole(user.role).charAt(0) + normalizeRole(user.role).slice(1).toLowerCase()
     : "Officer";
+  const role = normalizeRole(user?.role);
 
   return (
     <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-[var(--border-default)] bg-[var(--bg-surface)] lg:flex dark:border-[var(--border-default)] dark:bg-[var(--bg-surface)]">
@@ -110,7 +112,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         {navGroups
-          .filter(group => !group.roles || group.roles.includes(user?.role || ""))
+          .filter(group => !group.roles || group.roles.includes(role))
           .map((group) => (
           <div key={group.title} className="mb-4">
             <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-tertiary)]">
@@ -118,7 +120,7 @@ export default function Sidebar() {
             </p>
             <div className="space-y-0.5">
               {group.items
-                .filter(item => !item.roles || item.roles.includes(user?.role || ""))
+                .filter(item => !item.roles || item.roles.includes(role))
                 .map((item) => {
                 const isActive = pathname === item.href;
                 const Icon = item.icon;
@@ -129,7 +131,7 @@ export default function Sidebar() {
                     className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium transition-all duration-150 ${
                       isActive
                         ? "bg-[var(--accent-50)] text-[var(--accent-600)] shadow-[inset_0_0_0_1px_var(--accent-100)] dark:bg-[var(--accent-50)] dark:text-[var(--accent-500)]"
-                        : "text-[var(--fg-secondary)] hover:bg-(--accent-50) hover:text-(--accent-600) hover:translate-x-1 hover:shadow-[inset_0_0_0_1px_var(--accent-100)]"
+                        : "text-[var(--fg-secondary)] hover:bg-[var(--accent-50)] hover:text-[var(--accent-600)] hover:translate-x-1 hover:shadow-[inset_0_0_0_1px_var(--accent-100)]"
                     }`}
                   >
                     <Icon

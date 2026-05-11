@@ -16,7 +16,7 @@ import {
 import { Eye, EyeOff } from "lucide-react";
 import { SocialAuthButtons } from "./SocialAuthButtons";
 import { Divider } from "./Divider";
-import { signup } from "@/services/auth";
+import { login, signup } from "@/services/auth";
 
 type Role = "OFFICER" | "ADMIN" | "ANALYST";
 
@@ -51,17 +51,24 @@ export function SignupForm({ onSwitch }: { onSwitch?: () => void }) {
     setLoading(true);
     try {
       await signup({ name, email, password, role });
-      setSuccess("Account created. Please sign in.");
+      const result = await login({ email, password });
+      const token = result?.data?.token;
+      const user = result?.data?.user;
+
+      if (!token) {
+        throw new Error("Account created, but login token was not returned.");
+      }
+
+      window.localStorage.setItem("authToken", token);
+      if (user) {
+        window.localStorage.setItem("authUser", JSON.stringify(user));
+      }
+
+      setSuccess("Account created. Opening your role-based dashboard...");
       setName("");
       setEmail("");
       setPassword("");
-      setTimeout(() => {
-        if (onSwitch) {
-          onSwitch();
-        } else {
-          router.push("/login");
-        }
-      }, 600);
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed.");
     } finally {
@@ -124,17 +131,23 @@ export function SignupForm({ onSwitch }: { onSwitch?: () => void }) {
       <div className="space-y-2">
         <Label>Role*</Label>
         <Select value={role} onValueChange={(value) => setRole(value as Role)}>
-          <SelectTrigger className="bg-zinc-900 border-zinc-800">
+          <SelectTrigger className="w-full border-zinc-800 bg-zinc-900 text-zinc-100">
             <SelectValue />
           </SelectTrigger>
           <SelectContent
             position="popper"
             sideOffset={8}
-            className="z-[9999] bg-zinc-950 border border-zinc-800"
+            className="z-[9999] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl"
           >
-            <SelectItem value="OFFICER">Officer</SelectItem>
-            <SelectItem value="ADMIN">Admin</SelectItem>
-            <SelectItem value="ANALYST">Analyst</SelectItem>
+            <SelectItem value="OFFICER" className="text-zinc-100 focus:bg-emerald-500/15 focus:text-emerald-200">
+              Officer
+            </SelectItem>
+            <SelectItem value="ADMIN" className="text-zinc-100 focus:bg-emerald-500/15 focus:text-emerald-200">
+              Admin
+            </SelectItem>
+            <SelectItem value="ANALYST" className="text-zinc-100 focus:bg-emerald-500/15 focus:text-emerald-200">
+              Analyst
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
