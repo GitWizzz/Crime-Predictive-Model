@@ -53,19 +53,16 @@ exports.up = (pgm) => {
   // ---------------------------------------------------------------------------
   pgm.renameColumn("firs", "date_time", "occurred_at");
 
-  pgm.addColumns("firs", {
-    location_name: { type: "varchar(255)" },
-    zone_id:       { type: "integer", references: "zones", onDelete: "set null" },
-    victim_count:  { type: "integer", notNull: true, default: 1 },
-    description:   { type: "text" },
-    source:        { type: "varchar(50)", notNull: true, default: "'MANUAL'" },
-    registered_by: { type: "integer", references: "users", onDelete: "set null" },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("now()"),
-    },
-  });
+  pgm.sql(`
+    ALTER TABLE firs
+      ADD COLUMN IF NOT EXISTS location_name varchar(255),
+      ADD COLUMN IF NOT EXISTS zone_id integer REFERENCES zones(id) ON DELETE set null,
+      ADD COLUMN IF NOT EXISTS victim_count integer NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS description text,
+      ADD COLUMN IF NOT EXISTS source varchar(50) NOT NULL DEFAULT 'MANUAL',
+      ADD COLUMN IF NOT EXISTS registered_by integer REFERENCES users(id) ON DELETE set null,
+      ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone NOT NULL DEFAULT now();
+  `);
 
   // Drop old date_time index (now renamed) and recreate
   pgm.sql(`DROP INDEX IF EXISTS firs_date_time_idx;`);
@@ -142,17 +139,14 @@ exports.up = (pgm) => {
   // ---------------------------------------------------------------------------
   // TABLE: patrol_routes — add missing columns
   // ---------------------------------------------------------------------------
-  pgm.addColumns("patrol_routes", {
-    zone:                   { type: "varchar(100)" },
-    assigned_unit:          { type: "integer", references: "patrol_units", onDelete: "set null" },
-    total_distance_km:      { type: "numeric(8,3)" },
-    estimated_duration_min: { type: "integer" },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("now()"),
-    },
-  });
+  pgm.sql(`
+    ALTER TABLE patrol_routes
+      ADD COLUMN IF NOT EXISTS zone varchar(100),
+      ADD COLUMN IF NOT EXISTS assigned_unit integer REFERENCES patrol_units(id) ON DELETE set null,
+      ADD COLUMN IF NOT EXISTS total_distance_km numeric(8,3),
+      ADD COLUMN IF NOT EXISTS estimated_duration_min integer,
+      ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone NOT NULL DEFAULT now();
+  `);
   pgm.createIndex("patrol_routes", "status",        { name: "idx_patrol_routes_status" });
   pgm.createIndex("patrol_routes", "scheduled_for", { name: "idx_patrol_routes_scheduled_for" });
   pgm.createIndex("patrol_routes", "zone",          { name: "idx_patrol_routes_zone" });
@@ -160,11 +154,12 @@ exports.up = (pgm) => {
   // ---------------------------------------------------------------------------
   // TABLE: patrol_route_stops — add missing columns
   // ---------------------------------------------------------------------------
-  pgm.addColumns("patrol_route_stops", {
-    stop_name:      { type: "text" },
-    risk_score:     { type: "numeric(6,2)", notNull: true, default: 0 },
-    dwell_time_min: { type: "integer", notNull: true, default: 5 },
-  });
+  pgm.sql(`
+    ALTER TABLE patrol_route_stops
+      ADD COLUMN IF NOT EXISTS stop_name text,
+      ADD COLUMN IF NOT EXISTS risk_score numeric(6,2) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS dwell_time_min integer NOT NULL DEFAULT 5;
+  `);
 
   // ---------------------------------------------------------------------------
   // TABLE: patrol_units — add missing columns
@@ -224,9 +219,7 @@ exports.up = (pgm) => {
     id:             { type: "serial", primaryKey: true },
     name:           { type: "text", notNull: true },
     type:           { type: "varchar(50)", notNull: true, default: "'CUSTOM'" },
-    // boundary stored as GeoJSON { type: 'Polygon', coordinates: [...] }
     boundary:       { type: "jsonb", notNull: true },
-    // bounding box for fast pre-filter: { minLat, maxLat, minLon, maxLon }
     bbox:           { type: "jsonb" },
     alert_radius_m: { type: "integer", notNull: true, default: 500 },
     notify_roles:   { type: "text[]", notNull: true, default: pgm.func("ARRAY['ADMIN','OFFICER']") },
@@ -235,7 +228,7 @@ exports.up = (pgm) => {
     created_by:     { type: "integer", references: "users", onDelete: "set null" },
     created_at:     { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
     updated_at:     { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
+  }, { ifNotExists: true });
   pgm.createIndex("geo_fences", "active", { name: "idx_geo_fences_active" });
   pgm.createIndex("geo_fences", "type",   { name: "idx_geo_fences_type" });
 
@@ -256,7 +249,7 @@ exports.up = (pgm) => {
     incidents_encountered:{ type: "integer", notNull: true, default: 0 },
     notes:                { type: "text" },
     created_at:           { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
+  }, { ifNotExists: true });
   pgm.createIndex("patrol_logs", "route_id",   { name: "idx_patrol_logs_route_id" });
   pgm.createIndex("patrol_logs", "unit_id",    { name: "idx_patrol_logs_unit_id" });
   pgm.createIndex("patrol_logs", "officer_id", { name: "idx_patrol_logs_officer_id" });
