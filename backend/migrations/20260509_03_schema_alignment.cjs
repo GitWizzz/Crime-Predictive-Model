@@ -69,7 +69,8 @@ exports.up = (pgm) => {
   pgm.createIndex("firs", "severity",                   { name: "idx_firs_severity", ifNotExists: true });
   pgm.createIndex("firs", "registered_by",              { name: "idx_firs_registered_by", ifNotExists: true });
   pgm.createIndex("firs", "zone_id",                    { name: "idx_firs_zone_id", ifNotExists: true });
-  pgm.sql(`CREATE INDEX IF NOT EXISTS idx_firs_location_lat ON firs (((location->>'lat')::float));`);
+  pgm.sql(`CREATE INDEX IF NOT EXISTS idx_firs_location_lat ON firs (ST_Y(location::geometry));`);
+  pgm.sql(`CREATE INDEX IF NOT EXISTS idx_firs_location_lon ON firs (ST_X(location::geometry));`);
 
   pgm.sql(`
     ALTER TABLE zones
@@ -310,8 +311,8 @@ exports.up = (pgm) => {
   pgm.sql(`
     CREATE OR REPLACE VIEW hotspot_candidates AS
     SELECT id, fir_no, zone, police_station, crime_type, category, severity, occurred_at,
-    (location->>'lat')::float AS latitude, (location->>'lon')::float AS longitude
-    FROM firs WHERE location IS NOT NULL AND location->>'lat' IS NOT NULL AND occurred_at >= NOW() - INTERVAL '90 days' AND status != 'CLOSED';
+    ST_Y(location::geometry) AS latitude, ST_X(location::geometry) AS longitude
+    FROM firs WHERE location IS NOT NULL AND occurred_at >= NOW() - INTERVAL '90 days' AND status != 'CLOSED';
   `);
 
   pgm.sql(`
