@@ -16,178 +16,141 @@
  */
 
 exports.up = (pgm) => {
-
-  // ---------------------------------------------------------------------------
-  // EXTENSIONS (safe to add; pgcrypto already present)
-  // ---------------------------------------------------------------------------
   pgm.createExtension("uuid-ossp", { ifNotExists: true });
   pgm.createExtension("pg_trgm",   { ifNotExists: true });
 
-  // Drop the broken GIST index on JSONB location from previous migration
   pgm.sql(`DROP INDEX IF EXISTS firs_location_gix;`);
   pgm.sql(`DROP INDEX IF EXISTS irad_location_gix;`);
 
-  // ---------------------------------------------------------------------------
-  // TABLE: users — add missing columns
-  // ---------------------------------------------------------------------------
-  pgm.addColumns("users", {
-    failed_login_attempts: { type: "integer", notNull: true, default: 0 },
-    locked_until:          { type: "timestamp with time zone" },
-    last_failed_login:     { type: "timestamp with time zone" },
-    is_active:             { type: "boolean", notNull: true, default: true },
-    last_login_at:         { type: "timestamp with time zone" },
-    fcm_token:             { type: "text" },           // FCM push token for mobile app
-    fcm_token_updated_at:  { type: "timestamp with time zone" },
-    police_station:        { type: "varchar(100)" },   // Officer's home station
-    zone:                  { type: "varchar(100)" },   // Officer's assigned zone
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("now()"),
-    },
-  });
-  pgm.createIndex("users", "is_active",      { name: "idx_users_is_active" });
-  pgm.createIndex("users", "role",           { name: "idx_users_role" });
-  pgm.createIndex("users", "police_station", { name: "idx_users_police_station" });
-
-  // ---------------------------------------------------------------------------
-  // TABLE: firs — rename date_time → occurred_at + add missing columns
-  // ---------------------------------------------------------------------------
-  pgm.renameColumn("firs", "date_time", "occurred_at");
-
-  pgm.addColumns("firs", {
-    location_name: { type: "varchar(255)" },
-    zone_id:       { type: "integer", references: "zones", onDelete: "set null" },
-    victim_count:  { type: "integer", notNull: true, default: 1 },
-    description:   { type: "text" },
-    source:        { type: "varchar(50)", notNull: true, default: "'MANUAL'" },
-    registered_by: { type: "integer", references: "users", onDelete: "set null" },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("now()"),
-    },
-  });
-
-  // Drop old date_time index (now renamed) and recreate
-  pgm.sql(`DROP INDEX IF EXISTS firs_date_time_idx;`);
-  pgm.createIndex("firs", "occurred_at",                { name: "idx_firs_occurred_at" });
-  pgm.createIndex("firs", ["zone", "occurred_at", "crime_type"], { name: "idx_firs_zone_date_type" });
-  pgm.createIndex("firs", "police_station",             { name: "idx_firs_police_station" });
-  pgm.createIndex("firs", "status",                     { name: "idx_firs_status" });
-  pgm.createIndex("firs", "severity",                   { name: "idx_firs_severity" });
-  pgm.createIndex("firs", "registered_by",              { name: "idx_firs_registered_by" });
-  pgm.createIndex("firs", "zone_id",                    { name: "idx_firs_zone_id" });
-  // Functional index for lat/lon filtering on JSONB location
   pgm.sql(`
-    CREATE INDEX IF NOT EXISTS idx_firs_location_lat
-      ON firs (((location->>'lat')::float));
+    ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS failed_login_attempts integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS locked_until timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS last_failed_login timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS last_login_at timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS fcm_token text,
+      ADD COLUMN IF NOT EXISTS fcm_token_updated_at timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS police_station varchar(100),
+      ADD COLUMN IF NOT EXISTS zone varchar(100),
+      ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone NOT NULL DEFAULT now();
   `);
 
-  // ---------------------------------------------------------------------------
-  // TABLE: zones — add missing columns
-  // ---------------------------------------------------------------------------
-  pgm.addColumns("zones", {
-    parent_id: { type: "integer", references: "zones", onDelete: "set null" },
-    district:  { type: "varchar(100)" },
-    area_km2:  { type: "numeric(10,4)" },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("now()"),
-    },
-  });
-  pgm.createIndex("zones", "type",     { name: "idx_zones_type" });
-  pgm.createIndex("zones", "district", { name: "idx_zones_district" });
+  pgm.createIndex("users", "is_active",      { name: "idx_users_is_active", ifNotExists: true });
+  pgm.createIndex("users", "role",           { name: "idx_users_role", ifNotExists: true });
+  pgm.createIndex("users", "police_station", { name: "idx_users_police_station", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // TABLE: crime_classifications — add missing columns
-  // ---------------------------------------------------------------------------
-  pgm.addColumns("crime_classifications", {
-    is_cognizable: { type: "boolean", notNull: true, default: true },
-    bailable:      { type: "boolean" },
-  });
+  // Safety check for rename
+  pgm.sql(`
+    DO $$ 
+    BEGIN 
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='firs' AND column_name='date_time') THEN
+        ALTER TABLE firs RENAME COLUMN date_time TO occurred_at;
+      END IF;
+    END $$;
+  `);
 
-  // ---------------------------------------------------------------------------
-  // TABLE: irad_accidents — rename date_time → occurred_at + add missing cols
-  // ---------------------------------------------------------------------------
-  pgm.renameColumn("irad_accidents", "date_time", "occurred_at");
+  pgm.sql(`
+    ALTER TABLE firs
+      ADD COLUMN IF NOT EXISTS location_name varchar(255),
+      ADD COLUMN IF NOT EXISTS zone_id integer REFERENCES zones(id) ON DELETE set null,
+      ADD COLUMN IF NOT EXISTS victim_count integer NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS description text,
+      ADD COLUMN IF NOT EXISTS source varchar(50) NOT NULL DEFAULT 'MANUAL',
+      ADD COLUMN IF NOT EXISTS registered_by integer REFERENCES users(id) ON DELETE set null,
+      ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone NOT NULL DEFAULT now();
+  `);
 
-  pgm.addColumns("irad_accidents", {
-    location_name:      { type: "varchar(255)" },
-    road_type:          { type: "varchar(50)" },     // 'NH', 'SH', 'MDR', 'ODR', 'VR'
-    police_station:     { type: "varchar(100)" },
-    vehicles_involved:  { type: "integer", default: 1 },
-    casualties:         { type: "integer", notNull: true, default: 0 },
-    injuries:           { type: "integer", notNull: true, default: 0 },
-    weather_condition:  { type: "varchar(50)" },     // 'CLEAR', 'RAIN', 'FOG', 'DUST'
-    light_condition:    { type: "varchar(50)" },     // 'DAYLIGHT', 'DUSK', 'DARK_LIT', 'DARK_UNLIT'
-  });
+  pgm.sql(`DROP INDEX IF EXISTS firs_date_time_idx;`);
+  pgm.createIndex("firs", "occurred_at",                { name: "idx_firs_occurred_at", ifNotExists: true });
+  pgm.createIndex("firs", ["zone", "occurred_at", "crime_type"], { name: "idx_firs_zone_date_type", ifNotExists: true });
+  pgm.createIndex("firs", "police_station",             { name: "idx_firs_police_station", ifNotExists: true });
+  pgm.createIndex("firs", "status",                     { name: "idx_firs_status", ifNotExists: true });
+  pgm.createIndex("firs", "severity",                   { name: "idx_firs_severity", ifNotExists: true });
+  pgm.createIndex("firs", "registered_by",              { name: "idx_firs_registered_by", ifNotExists: true });
+  pgm.createIndex("firs", "zone_id",                    { name: "idx_firs_zone_id", ifNotExists: true });
+  pgm.sql(`CREATE INDEX IF NOT EXISTS idx_firs_location_lat ON firs (ST_Y(location::geometry));`);
+  pgm.sql(`CREATE INDEX IF NOT EXISTS idx_firs_location_lon ON firs (ST_X(location::geometry));`);
+
+  pgm.sql(`
+    ALTER TABLE zones
+      ADD COLUMN IF NOT EXISTS parent_id integer REFERENCES zones(id) ON DELETE set null,
+      ADD COLUMN IF NOT EXISTS district varchar(100),
+      ADD COLUMN IF NOT EXISTS area_km2 numeric(10,4),
+      ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone NOT NULL DEFAULT now();
+  `);
+  pgm.createIndex("zones", "type",     { name: "idx_zones_type", ifNotExists: true });
+  pgm.createIndex("zones", "district", { name: "idx_zones_district", ifNotExists: true });
+
+  pgm.sql(`
+    ALTER TABLE crime_classifications
+      ADD COLUMN IF NOT EXISTS is_cognizable boolean NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS bailable boolean;
+  `);
+
+  pgm.sql(`
+    DO $$ 
+    BEGIN 
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='irad_accidents' AND column_name='date_time') THEN
+        ALTER TABLE irad_accidents RENAME COLUMN date_time TO occurred_at;
+      END IF;
+    END $$;
+  `);
+
+  pgm.sql(`
+    ALTER TABLE irad_accidents
+      ADD COLUMN IF NOT EXISTS location_name varchar(255),
+      ADD COLUMN IF NOT EXISTS road_type varchar(50),
+      ADD COLUMN IF NOT EXISTS police_station varchar(100),
+      ADD COLUMN IF NOT EXISTS vehicles_involved integer DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS casualties integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS injuries integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS weather_condition varchar(50),
+      ADD COLUMN IF NOT EXISTS light_condition varchar(50);
+  `);
 
   pgm.sql(`DROP INDEX IF EXISTS irad_accidents_date_idx;`);
-  pgm.createIndex("irad_accidents", "occurred_at",   { name: "idx_irad_occurred_at" });
-  pgm.createIndex("irad_accidents", "district",      { name: "idx_irad_district" });
-  pgm.createIndex("irad_accidents", "severity",      { name: "idx_irad_severity" });
-  pgm.createIndex("irad_accidents", "police_station",{ name: "idx_irad_police_station" });
+  pgm.createIndex("irad_accidents", "occurred_at",   { name: "idx_irad_occurred_at", ifNotExists: true });
+  pgm.createIndex("irad_accidents", "district",      { name: "idx_irad_district", ifNotExists: true });
+  pgm.createIndex("irad_accidents", "severity",      { name: "idx_irad_severity", ifNotExists: true });
+  pgm.createIndex("irad_accidents", "police_station",{ name: "idx_irad_police_station", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // TABLE: audit_logs — add missing columns
-  // ---------------------------------------------------------------------------
-  pgm.addColumns("audit_logs", {
-    user_agent: { type: "text" },
-  });
-  pgm.createIndex("audit_logs", "action",     { name: "idx_audit_logs_action" });
-  pgm.createIndex("audit_logs", "entity",     { name: "idx_audit_logs_entity" });
-  pgm.createIndex("audit_logs", "created_at", { name: "idx_audit_logs_created_at" });
-  pgm.createIndex("audit_logs", "user_id",    { name: "idx_audit_logs_user_id" });
+  pgm.sql(`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_agent text;`);
+  pgm.createIndex("audit_logs", "action",     { name: "idx_audit_logs_action", ifNotExists: true });
+  pgm.createIndex("audit_logs", "entity",     { name: "idx_audit_logs_entity", ifNotExists: true });
+  pgm.createIndex("audit_logs", "created_at", { name: "idx_audit_logs_created_at", ifNotExists: true });
+  pgm.createIndex("audit_logs", "user_id",    { name: "idx_audit_logs_user_id", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // TABLE: patrol_routes — add missing columns
-  // ---------------------------------------------------------------------------
-  pgm.addColumns("patrol_routes", {
-    zone:                   { type: "varchar(100)" },
-    assigned_unit:          { type: "integer", references: "patrol_units", onDelete: "set null" },
-    total_distance_km:      { type: "numeric(8,3)" },
-    estimated_duration_min: { type: "integer" },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("now()"),
-    },
-  });
-  pgm.createIndex("patrol_routes", "status",        { name: "idx_patrol_routes_status" });
-  pgm.createIndex("patrol_routes", "scheduled_for", { name: "idx_patrol_routes_scheduled_for" });
-  pgm.createIndex("patrol_routes", "zone",          { name: "idx_patrol_routes_zone" });
+  pgm.sql(`
+    ALTER TABLE patrol_routes
+      ADD COLUMN IF NOT EXISTS zone varchar(100),
+      ADD COLUMN IF NOT EXISTS assigned_unit integer REFERENCES patrol_units(id) ON DELETE set null,
+      ADD COLUMN IF NOT EXISTS total_distance_km numeric(8,3),
+      ADD COLUMN IF NOT EXISTS estimated_duration_min integer,
+      ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone NOT NULL DEFAULT now();
+  `);
+  pgm.createIndex("patrol_routes", "status",        { name: "idx_patrol_routes_status", ifNotExists: true });
+  pgm.createIndex("patrol_routes", "scheduled_for", { name: "idx_patrol_routes_scheduled_for", ifNotExists: true });
+  pgm.createIndex("patrol_routes", "zone",          { name: "idx_patrol_routes_zone", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // TABLE: patrol_route_stops — add missing columns
-  // ---------------------------------------------------------------------------
-  pgm.addColumns("patrol_route_stops", {
-    stop_name:      { type: "text" },
-    risk_score:     { type: "numeric(6,2)", notNull: true, default: 0 },
-    dwell_time_min: { type: "integer", notNull: true, default: 5 },
-  });
+  pgm.sql(`
+    ALTER TABLE patrol_route_stops
+      ADD COLUMN IF NOT EXISTS stop_name text,
+      ADD COLUMN IF NOT EXISTS risk_score numeric(6,2) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS dwell_time_min integer NOT NULL DEFAULT 5;
+  `);
 
-  // ---------------------------------------------------------------------------
-  // TABLE: patrol_units — add missing columns
-  // ---------------------------------------------------------------------------
-  pgm.addColumns("patrol_units", {
-    unit_type:    { type: "varchar(50)", notNull: true, default: "'VEHICLE'" },
-    officer_name: { type: "varchar(255)" },
-    officer_badge:{ type: "varchar(50)" },
-    station:      { type: "varchar(100)" },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("now()"),
-    },
-  });
-  pgm.createIndex("patrol_units", "status",          { name: "idx_patrol_units_status" });
-  pgm.createIndex("patrol_units", "assigned_route_id",{ name: "idx_patrol_units_assigned_route" });
+  pgm.sql(`
+    ALTER TABLE patrol_units
+      ADD COLUMN IF NOT EXISTS unit_type varchar(50) NOT NULL DEFAULT 'VEHICLE',
+      ADD COLUMN IF NOT EXISTS officer_name varchar(255),
+      ADD COLUMN IF NOT EXISTS officer_badge varchar(50),
+      ADD COLUMN IF NOT EXISTS station varchar(100),
+      ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone NOT NULL DEFAULT now();
+  `);
+  pgm.createIndex("patrol_units", "status",          { name: "idx_patrol_units_status", ifNotExists: true });
+  pgm.createIndex("patrol_units", "assigned_route_id",{ name: "idx_patrol_units_assigned_route", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // NEW TABLE: refresh_tokens
-  // ---------------------------------------------------------------------------
   pgm.createTable("refresh_tokens", {
     id:         { type: "uuid", primaryKey: true, default: pgm.func("gen_random_uuid()") },
     user_id:    { type: "integer", notNull: true, references: "users", onDelete: "cascade" },
@@ -197,14 +160,11 @@ exports.up = (pgm) => {
     ip_address: { type: "varchar(64)" },
     user_agent: { type: "text" },
     created_at: { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
-  pgm.createIndex("refresh_tokens", "user_id",    { name: "idx_refresh_tokens_user_id" });
-  pgm.createIndex("refresh_tokens", "token_hash", { name: "idx_refresh_tokens_token_hash" });
-  pgm.createIndex("refresh_tokens", "expires_at", { name: "idx_refresh_tokens_expires_at" });
+  }, { ifNotExists: true });
+  pgm.createIndex("refresh_tokens", "user_id",    { name: "idx_refresh_tokens_user_id", ifNotExists: true });
+  pgm.createIndex("refresh_tokens", "token_hash", { name: "idx_refresh_tokens_token_hash", ifNotExists: true });
+  pgm.createIndex("refresh_tokens", "expires_at", { name: "idx_refresh_tokens_expires_at", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // NEW TABLE: fir_attachments
-  // ---------------------------------------------------------------------------
   pgm.createTable("fir_attachments", {
     id:              { type: "uuid", primaryKey: true, default: pgm.func("gen_random_uuid()") },
     fir_id:          { type: "integer", notNull: true, references: "firs", onDelete: "cascade" },
@@ -213,22 +173,17 @@ exports.up = (pgm) => {
     mime_type:       { type: "text", notNull: true },
     size_bytes:      { type: "integer", notNull: true },
     storage_key:     { type: "text", notNull: true, unique: true },
-    attachment_type: { type: "varchar(20)", notNull: true, default: "'OTHER'" },
+    attachment_type: { type: "varchar(20)", notNull: true, default: "OTHER" },
     uploaded_by:     { type: "integer", references: "users", onDelete: "set null" },
     uploaded_at:     { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
-  pgm.createIndex("fir_attachments", "fir_id", { name: "idx_fir_attachments_fir_id" });
+  }, { ifNotExists: true });
+  pgm.createIndex("fir_attachments", "fir_id", { name: "idx_fir_attachments_fir_id", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // NEW TABLE: geo_fences
-  // ---------------------------------------------------------------------------
   pgm.createTable("geo_fences", {
     id:             { type: "serial", primaryKey: true },
     name:           { type: "text", notNull: true },
-    type:           { type: "varchar(50)", notNull: true, default: "'CUSTOM'" },
-    // boundary stored as GeoJSON { type: 'Polygon', coordinates: [...] }
+    type:           { type: "varchar(50)", notNull: true, default: "CUSTOM" },
     boundary:       { type: "jsonb", notNull: true },
-    // bounding box for fast pre-filter: { minLat, maxLat, minLon, maxLon }
     bbox:           { type: "jsonb" },
     alert_radius_m: { type: "integer", notNull: true, default: 500 },
     notify_roles:   { type: "text[]", notNull: true, default: pgm.func("ARRAY['ADMIN','OFFICER']") },
@@ -237,13 +192,10 @@ exports.up = (pgm) => {
     created_by:     { type: "integer", references: "users", onDelete: "set null" },
     created_at:     { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
     updated_at:     { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
-  pgm.createIndex("geo_fences", "active", { name: "idx_geo_fences_active" });
-  pgm.createIndex("geo_fences", "type",   { name: "idx_geo_fences_type" });
+  }, { ifNotExists: true });
+  pgm.createIndex("geo_fences", "active", { name: "idx_geo_fences_active", ifNotExists: true });
+  pgm.createIndex("geo_fences", "type",   { name: "idx_geo_fences_type", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // NEW TABLE: patrol_logs
-  // ---------------------------------------------------------------------------
   pgm.createTable("patrol_logs", {
     id:                   { type: "serial", primaryKey: true },
     route_id:             { type: "integer", notNull: true, references: "patrol_routes", onDelete: "cascade" },
@@ -258,69 +210,53 @@ exports.up = (pgm) => {
     incidents_encountered:{ type: "integer", notNull: true, default: 0 },
     notes:                { type: "text" },
     created_at:           { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
-  pgm.createIndex("patrol_logs", "route_id",   { name: "idx_patrol_logs_route_id" });
-  pgm.createIndex("patrol_logs", "unit_id",    { name: "idx_patrol_logs_unit_id" });
-  pgm.createIndex("patrol_logs", "officer_id", { name: "idx_patrol_logs_officer_id" });
-  pgm.createIndex("patrol_logs", "started_at", { name: "idx_patrol_logs_started_at" });
+  }, { ifNotExists: true });
+  pgm.createIndex("patrol_logs", "route_id",   { name: "idx_patrol_logs_route_id", ifNotExists: true });
+  pgm.createIndex("patrol_logs", "unit_id",    { name: "idx_patrol_logs_unit_id", ifNotExists: true });
+  pgm.createIndex("patrol_logs", "officer_id", { name: "idx_patrol_logs_officer_id", ifNotExists: true });
+  pgm.createIndex("patrol_logs", "started_at", { name: "idx_patrol_logs_started_at", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // NEW TABLE: alerts  (crime spike alerts — feeds /api/v1/alerts)
-  // ---------------------------------------------------------------------------
   pgm.createTable("alerts", {
     id:          { type: "uuid", primaryKey: true, default: pgm.func("gen_random_uuid()") },
     zone:        { type: "varchar(100)", notNull: true },
     crime_type:  { type: "varchar(100)" },
     count:       { type: "integer", notNull: true },
     z_score:     { type: "numeric(6,3)", notNull: true },
-    // severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-    severity:    { type: "varchar(20)", notNull: true, default: "'MEDIUM'" },
+    severity:    { type: "varchar(20)", notNull: true, default: "MEDIUM" },
     message:     { type: "text", notNull: true },
-    // JSONB snapshot: { expected, actual, stdDev, windowDays }
     anomaly_details: { type: "jsonb" },
-    // Which users have read this alert (array of user IDs for targeted reads)
     read_by:     { type: "integer[]", notNull: true, default: pgm.func("ARRAY[]::integer[]") },
-    // Source: 'ANOMALY_DETECTION' | 'MANUAL' | 'GEO_FENCE'
-    source:      { type: "varchar(50)", notNull: true, default: "'ANOMALY_DETECTION'" },
+    source:      { type: "varchar(50)", notNull: true, default: "ANOMALY_DETECTION" },
     created_at:  { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
-  pgm.createIndex("alerts", "zone",       { name: "idx_alerts_zone" });
-  pgm.createIndex("alerts", "severity",   { name: "idx_alerts_severity" });
-  pgm.createIndex("alerts", "created_at", { name: "idx_alerts_created_at" });
+  }, { ifNotExists: true });
+  pgm.createIndex("alerts", "zone",       { name: "idx_alerts_zone", ifNotExists: true });
+  pgm.createIndex("alerts", "severity",   { name: "idx_alerts_severity", ifNotExists: true });
+  pgm.createIndex("alerts", "created_at", { name: "idx_alerts_created_at", ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // NEW TABLE: user_preferences  (per-user settings — feeds /dashboard/settings)
-  // ---------------------------------------------------------------------------
   pgm.createTable("user_preferences", {
     user_id:               { type: "integer", primaryKey: true, references: "users", onDelete: "cascade" },
     default_zone:          { type: "varchar(100)" },
-    theme:                 { type: "varchar(20)", notNull: true, default: "'dark'" },
-    language:              { type: "varchar(10)", notNull: true, default: "'en'" },
+    theme:                 { type: "varchar(20)", notNull: true, default: "dark" },
+    language:              { type: "varchar(10)", notNull: true, default: "en" },
     notification_enabled:  { type: "boolean", notNull: true, default: true },
     email_alerts_enabled:  { type: "boolean", notNull: true, default: false },
-    map_default_layer:     { type: "varchar(20)", notNull: true, default: "'clusters'" },
-    // Flexible column for future settings without schema changes
+    map_default_layer:     { type: "varchar(20)", notNull: true, default: "clusters" },
     extras:                { type: "jsonb", notNull: true, default: pgm.func("'{}'::jsonb") },
     updated_at:            { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
+  }, { ifNotExists: true });
 
-  // ---------------------------------------------------------------------------
-  // NEW TABLE: schema_versions (track applied schema changes)
-  // ---------------------------------------------------------------------------
   pgm.createTable("schema_versions", {
     version:    { type: "text", primaryKey: true },
     description:{ type: "text" },
     applied_at: { type: "timestamp with time zone", notNull: true, default: pgm.func("now()") },
-  });
+  }, { ifNotExists: true });
+
   pgm.sql(`
     INSERT INTO schema_versions (version, description)
-    VALUES ('2026-05-09-v3', 'Schema alignment: missing columns, new tables (refresh_tokens, fir_attachments, geo_fences, patrol_logs, alerts, user_preferences), 3 views, indexes')
+    VALUES ('2026-05-09-v3', 'Schema alignment: missing columns, new tables, 3 views, indexes')
     ON CONFLICT (version) DO NOTHING;
   `);
 
-  // ---------------------------------------------------------------------------
-  // TRIGGERS: updated_at auto-maintenance
-  // ---------------------------------------------------------------------------
   pgm.sql(`
     CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
     BEGIN
@@ -330,10 +266,7 @@ exports.up = (pgm) => {
     $$ LANGUAGE plpgsql;
   `);
 
-  const tablesWithUpdatedAt = [
-    "users", "zones", "firs", "patrol_routes", "patrol_units",
-    "geo_fences", "user_preferences"
-  ];
+  const tablesWithUpdatedAt = ["users", "zones", "firs", "patrol_routes", "patrol_units", "geo_fences", "user_preferences"];
   tablesWithUpdatedAt.forEach((t) => {
     pgm.sql(`
       DROP TRIGGER IF EXISTS trg_${t}_updated_at ON ${t};
@@ -343,96 +276,54 @@ exports.up = (pgm) => {
     `);
   });
 
-  // ---------------------------------------------------------------------------
-  // VIEWS
-  // ---------------------------------------------------------------------------
-
-  // View: fir_summary
   pgm.sql(`
     CREATE OR REPLACE VIEW fir_summary AS
     SELECT
-      f.id,
-      f.fir_no,
-      f.crime_type,
-      f.category,
-      f.act_type,
-      f.section_code,
-      cc.title                                            AS section_title,
-      cc.severity                                         AS classification_severity,
-      cc.is_women_safety,
-      f.severity                                          AS fir_severity,
-      f.occurred_at,
-      EXTRACT(YEAR  FROM f.occurred_at)::INT             AS year,
-      EXTRACT(MONTH FROM f.occurred_at)::INT             AS month,
-      EXTRACT(DOW   FROM f.occurred_at)::INT             AS day_of_week,
-      EXTRACT(HOUR  FROM f.occurred_at)::INT             AS hour_of_day,
-      f.zone,
-      f.police_station,
-      f.location_name,
-      (f.location->>'lat')::float                        AS latitude,
-      (f.location->>'lon')::float                        AS longitude,
-      f.victim_gender,
-      f.victim_age,
-      f.victim_count,
-      f.status,
-      f.source,
-      f.registered_by,
-      u.name                                             AS registered_by_name
+      f.id, f.fir_no, f.crime_type, f.category, f.act_type, f.section_code,
+      cc.title AS section_title, cc.severity AS classification_severity, cc.is_women_safety,
+      f.severity AS fir_severity, f.occurred_at,
+      EXTRACT(YEAR FROM f.occurred_at)::INT AS year,
+      EXTRACT(MONTH FROM f.occurred_at)::INT AS month,
+      EXTRACT(DOW FROM f.occurred_at)::INT AS day_of_week,
+      EXTRACT(HOUR FROM f.occurred_at)::INT AS hour_of_day,
+      f.zone, f.police_station, f.location_name,
+      ST_Y(f.location::geometry) AS latitude, ST_X(f.location::geometry) AS longitude,
+      f.victim_gender, f.victim_age, f.victim_count, f.status, f.source,
+      f.registered_by, u.name AS registered_by_name
     FROM firs f
     LEFT JOIN crime_classifications cc ON f.classification_id = cc.id
-    LEFT JOIN users u                  ON f.registered_by = u.id;
+    LEFT JOIN users u ON f.registered_by = u.id;
   `);
 
-  // View: zone_crime_stats
   pgm.sql(`
     CREATE OR REPLACE VIEW zone_crime_stats AS
     SELECT
-      zone,
-      COUNT(*)                                                          AS total_firs,
+      zone, COUNT(*) AS total_firs,
       COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '7 days') AS firs_last_7_days,
-      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '30 days')AS firs_last_30_days,
-      COUNT(*) FILTER (WHERE status = 'PENDING')                        AS pending_firs,
-      MAX(severity)                                                     AS max_severity,
-      ROUND(AVG(severity), 2)                                           AS avg_severity,
-      MODE() WITHIN GROUP (ORDER BY crime_type)                         AS dominant_crime_type,
-      MIN(occurred_at)                                                   AS first_fir_date,
-      MAX(occurred_at)                                                   AS latest_fir_date
-    FROM firs
-    WHERE zone IS NOT NULL
-    GROUP BY zone;
+      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '30 days') AS firs_last_30_days,
+      COUNT(*) FILTER (WHERE status = 'PENDING') AS pending_firs,
+      MAX(severity) AS max_severity, ROUND(AVG(severity), 2) AS avg_severity,
+      MODE() WITHIN GROUP (ORDER BY crime_type) AS dominant_crime_type,
+      MIN(occurred_at) AS first_fir_date, MAX(occurred_at) AS latest_fir_date
+    FROM firs WHERE zone IS NOT NULL GROUP BY zone;
   `);
 
-  // View: hotspot_candidates (past 90 days, non-closed, has location)
   pgm.sql(`
     CREATE OR REPLACE VIEW hotspot_candidates AS
-    SELECT
-      id,
-      fir_no,
-      zone,
-      police_station,
-      crime_type,
-      category,
-      severity,
-      occurred_at,
-      (location->>'lat')::float AS latitude,
-      (location->>'lon')::float AS longitude
-    FROM firs
-    WHERE location IS NOT NULL
-      AND location->>'lat' IS NOT NULL
-      AND occurred_at >= NOW() - INTERVAL '90 days'
-      AND status != 'CLOSED';
+    SELECT id, fir_no, zone, police_station, crime_type, category, severity, occurred_at,
+    ST_Y(location::geometry) AS latitude, ST_X(location::geometry) AS longitude
+    FROM firs WHERE location IS NOT NULL AND occurred_at >= NOW() - INTERVAL '90 days' AND status != 'CLOSED';
   `);
 
-  // View: dashboard_summary (used by GET /api/v1/dashboard/summary)
   pgm.sql(`
     CREATE OR REPLACE VIEW dashboard_summary AS
     SELECT
       COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '24 hours') AS firs_last_24h,
-      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '7 days')   AS firs_last_7d,
-      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '30 days')  AS firs_last_30d,
-      COUNT(*) FILTER (WHERE status = 'PENDING')                          AS pending_firs,
-      MODE() WITHIN GROUP (ORDER BY crime_type)                           AS top_crime_type,
-      NOW()                                                               AS generated_at
+      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '7 days') AS firs_last_7d,
+      COUNT(*) FILTER (WHERE occurred_at >= NOW() - INTERVAL '30 days') AS firs_last_30d,
+      COUNT(*) FILTER (WHERE status = 'PENDING') AS pending_firs,
+      MODE() WITHIN GROUP (ORDER BY crime_type) AS top_crime_type,
+      NOW() AS generated_at
     FROM firs;
   `);
 };
@@ -442,7 +333,6 @@ exports.down = (pgm) => {
   pgm.sql(`DROP VIEW IF EXISTS hotspot_candidates;`);
   pgm.sql(`DROP VIEW IF EXISTS zone_crime_stats;`);
   pgm.sql(`DROP VIEW IF EXISTS fir_summary;`);
-
   pgm.dropTable("schema_versions",  { ifExists: true });
   pgm.dropTable("user_preferences", { ifExists: true });
   pgm.dropTable("alerts",           { ifExists: true });

@@ -7,7 +7,7 @@ dotenv.config();
 const { Client } = pkg;
 
 const client = new Client({
-  host: process.env.DB_HOST || "localhost",
+  host: process.env.DB_HOST || "crime-postgres",
   port: Number(process.env.DB_PORT || 5432),
   user: process.env.DB_USER || "postgres",
   password: process.env.DB_PASSWORD,
@@ -110,7 +110,7 @@ const main = async () => {
     for (const d of districts) {
       await client.query(
         `INSERT INTO zones (name, type, boundary)
-         VALUES ($1, 'DISTRICT', $2::jsonb)
+         VALUES ($1, 'DISTRICT', ST_GeomFromGeoJSON($2)::geometry)
          ON CONFLICT (name, type) DO UPDATE SET boundary = EXCLUDED.boundary`,
         [d.name, JSON.stringify(asPolygonGeometry(d))]
       );
@@ -125,7 +125,7 @@ const main = async () => {
       });
       await client.query(
         `INSERT INTO zones (name, type, boundary)
-         VALUES ($1, 'STATION', $2::jsonb)
+         VALUES ($1, 'STATION', ST_GeomFromGeoJSON($2)::geometry)
          ON CONFLICT (name, type) DO UPDATE SET boundary = EXCLUDED.boundary`,
         [s.name, JSON.stringify(boundary)]
       );
@@ -157,7 +157,7 @@ const main = async () => {
          (fir_no, crime_type, section, date_time, location, police_station, zone, status,
           act_type, section_code, severity, category, classification_id, victim_gender, victim_age)
          VALUES
-         ($1, $2, $3, $4, $5::jsonb, $6, $7, 'PENDING',
+         ($1, $2, $3, $4, ST_SetSRID(ST_Point($15, $16), 4326)::geography, $6, $7, 'PENDING',
           $8, $9, $10, $11, $12, $13, $14)
          ON CONFLICT (fir_no) DO NOTHING`,
         [
@@ -165,12 +165,7 @@ const main = async () => {
           c.category,
           c.section_code,
           dt.toISOString(),
-          JSON.stringify({
-            type: "Point",
-            coordinates: [lon, lat],
-            latitude: lat,
-            longitude: lon,
-          }),
+          null, // placeholder for loc
           station.name,
           district,
           c.act_type,
@@ -180,6 +175,8 @@ const main = async () => {
           c.id,
           Math.random() > 0.5 ? "M" : "F",
           Math.floor(rand(18, 65)),
+          lon,
+          lat
         ]
       );
     }
@@ -194,21 +191,18 @@ const main = async () => {
       await client.query(
         `INSERT INTO irad_accidents
          (accident_id, occurred_at, severity, location, road_name, district, description, source)
-         VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, 'IRAD')
+         VALUES ($1, $2, $3, ST_SetSRID(ST_Point($8, $9), 4326)::geography, $4, $5, $6, 'IRAD')
          ON CONFLICT (accident_id) DO NOTHING`,
         [
           `IRAD-${String(i).padStart(4, "0")}`,
           dt.toISOString(),
           Math.floor(rand(1, 5)),
-          JSON.stringify({
-            type: "Point",
-            coordinates: [lon, lat],
-            latitude: lat,
-            longitude: lon,
-          }),
           `${district} Main Road`,
           district,
           "Sample imported accident record",
+          null,
+          lon,
+          lat
         ]
       );
     }

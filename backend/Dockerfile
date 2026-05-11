@@ -6,6 +6,7 @@ RUN npm ci --omit=dev
 
 COPY src ./src
 COPY migrations ./migrations
+COPY scripts ./scripts
 COPY pgm.config.cjs ./
 
 ENV NODE_ENV=production

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import "./globals.css";
 import { Suspense } from "react";
 import TopNav from "@/components/layout/TopNav";
