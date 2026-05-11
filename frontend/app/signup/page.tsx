@@ -48,7 +48,7 @@ export default function SignupPage() {
 
         <div className="flex items-center justify-center px-6 overflow-visible">
           <div className="w-full max-w-md rounded-2xl bg-zinc-950 p-8 shadow-2xl overflow-visible">
-            <SignupForm onSwitch={() => {}} />
+            <SignupForm />
           </div>
         </div>
         </div>

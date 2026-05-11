@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import "./globals.css";
+import { Suspense } from "react";
 import TopNav from "@/components/layout/TopNav";
 
 export default function RootLayout({
@@ -10,7 +11,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <Suspense>
+        <Suspense fallback={null}>
           <TopNav />
         </Suspense>
         <div className="min-h-[calc(100vh-56px)]">{children}</div>

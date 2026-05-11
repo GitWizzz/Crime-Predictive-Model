@@ -1,209 +1,374 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
-  ChartNoAxesColumn,
-  Clock3,
+  BarChart3,
+  Bell,
+  Crosshair,
+  FileText,
   MapPinned,
-  Radar,
+  RadioTower,
   Route,
-  ShieldCheck,
   ShieldAlert,
-  Sparkles,
-  Zap,
+  TrendingUp,
 } from "lucide-react";
+import type { FeatureCollection, Geometry, Position } from "geojson";
 
-const statCards = [
-  { label: "Active hotspots", value: "127", tone: "text-[var(--risk-high)]" },
-  { label: "Stations covered", value: "42", tone: "text-[var(--accent-500)]" },
-  { label: "Forecast confidence", value: "80%", tone: "text-[var(--risk-low)]" },
-];
-
-const pillars = [
+const features = [
   {
-    icon: Radar,
-    title: "Map-first command intelligence",
-    copy: "Detect DBSCAN/KDE hotspots with district overlays before incidents escalate.",
+    icon: MapPinned,
+    title: "Real-Time Hotspot Mapping",
+    description: "Identify crime-prone areas using advanced clustering algorithms like DBSCAN and KDE, visualized on command dashboards.",
+  },
+  {
+    icon: BarChart3,
+    title: "Predictive Analytics",
+    description: "Forecast crime trends with confidence intervals using Prophet and seasonal analysis.",
+  },
+  {
+    icon: Route,
+    title: "Optimized Patrol Routes",
+    description: "Generate efficient patrol paths using OR-Tools optimization for maximum coverage of high-risk areas.",
+  },
+  {
+    icon: FileText,
+    title: "FIR Data Integration",
+    description: "Process and classify FIR records by IPC categories with automated bulk import and validation.",
+  },
+  {
+    icon: Bell,
+    title: "Alert System",
+    description: "Real-time notifications for emerging hotspots and risk spikes across all 38 districts.",
   },
   {
     icon: ShieldAlert,
-    title: "Field-grade FIR operations",
-    copy: "Register FIRs quickly, preserve evidence context, and route action to stations.",
-  },
-  {
-    icon: ChartNoAxesColumn,
-    title: "Forecasts with confidence bands",
-    copy: "Turn trend signals into patrol decisions with interpretable confidence ranges.",
+    title: "Risk Assessment",
+    description: "SHAP-based explanations for risk scores, ensuring transparency and trust in predictions.",
   },
 ];
 
-const workflow = [
-  { step: "01", title: "Ingest FIR data", icon: ShieldCheck },
-  { step: "02", title: "Detect priority clusters", icon: Radar },
-  { step: "03", title: "Dispatch patrol routes", icon: Route },
-  { step: "04", title: "Track response impact", icon: Clock3 },
+const stats = [
+  { value: "38", label: "Districts Covered", icon: MapPinned },
+  { value: "Secure", label: "FIR Data Pipeline", icon: FileText },
+  { value: "Live", label: "Risk Intelligence", icon: Crosshair },
+  { value: "80%", label: "Prediction Accuracy", icon: TrendingUp },
 ];
+
+type DistrictCollection = FeatureCollection<Geometry, { name?: string }>;
+
+const MAP_WIDTH = 620;
+const MAP_HEIGHT = 430;
+const MAP_PAD = 34;
+
+const isPosition = (value: unknown): value is Position =>
+  Array.isArray(value) && typeof value[0] === "number" && typeof value[1] === "number";
+
+const collectRings = (geometry: Geometry): Position[][] => {
+  if (geometry.type === "Polygon") return geometry.coordinates as Position[][];
+  if (geometry.type === "MultiPolygon") return geometry.coordinates.flat(1) as Position[][];
+  return [];
+};
+
+const getBounds = (features: DistrictCollection["features"]) => {
+  const bounds = features.reduce(
+    (acc, feature) => {
+      collectRings(feature.geometry).forEach((ring) => {
+        ring.forEach((point) => {
+          if (!isPosition(point)) return;
+          acc.minLon = Math.min(acc.minLon, point[0]);
+          acc.maxLon = Math.max(acc.maxLon, point[0]);
+          acc.minLat = Math.min(acc.minLat, point[1]);
+          acc.maxLat = Math.max(acc.maxLat, point[1]);
+        });
+      });
+      return acc;
+    },
+    { minLon: Infinity, maxLon: -Infinity, minLat: Infinity, maxLat: -Infinity }
+  );
+
+  return Number.isFinite(bounds.minLon) ? bounds : null;
+};
+
+const ringToPath = (
+  ring: Position[],
+  bounds: NonNullable<ReturnType<typeof getBounds>>
+) => {
+  const width = MAP_WIDTH - MAP_PAD * 2;
+  const height = MAP_HEIGHT - MAP_PAD * 2;
+  const lonSpan = bounds.maxLon - bounds.minLon || 1;
+  const latSpan = bounds.maxLat - bounds.minLat || 1;
+  const scale = Math.min(width / lonSpan, height / latSpan);
+  const offsetX = (MAP_WIDTH - lonSpan * scale) / 2;
+  const offsetY = (MAP_HEIGHT - latSpan * scale) / 2;
+
+  return ring
+    .filter(isPosition)
+    .map(([lon, lat], index) => {
+      const x = offsetX + (lon - bounds.minLon) * scale;
+      const y = offsetY + (bounds.maxLat - lat) * scale;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+};
+
+function BiharMapPreview() {
+  const [districts, setDistricts] = useState<DistrictCollection | null>(null);
+
+  useEffect(() => {
+    fetch("/bihar_districts.geojson")
+      .then((response) => response.json())
+      .then((data: DistrictCollection) => setDistricts(data))
+      .catch(() => setDistricts(null));
+  }, []);
+
+  const paths = useMemo(() => {
+    if (!districts) return [];
+    const bounds = getBounds(districts.features);
+    if (!bounds) return [];
+
+    return districts.features.flatMap((feature, featureIndex) =>
+      collectRings(feature.geometry).map((ring, ringIndex) => ({
+        id: `${feature.properties?.name || "district"}-${featureIndex}-${ringIndex}`,
+        d: `${ringToPath(ring, bounds)} Z`,
+      }))
+    );
+  }, [districts]);
+
+  const markers = [
+    { x: "48%", y: "34%", tone: "bg-[var(--risk-medium)]", ring: "bg-[var(--risk-medium)]/20", label: "Patna" },
+    { x: "59%", y: "23%", tone: "bg-[var(--risk-low)]", ring: "bg-[var(--risk-low)]/20", label: "Muzaffarpur" },
+    { x: "67%", y: "55%", tone: "bg-[var(--risk-low)]", ring: "bg-[var(--risk-low)]/20", label: "Bhagalpur" },
+    { x: "35%", y: "64%", tone: "bg-[var(--risk-high)]", ring: "bg-[var(--risk-high)]/20", label: "Gaya" },
+    { x: "43%", y: "51%", tone: "bg-[var(--risk-medium)]", ring: "bg-[var(--risk-medium)]/20", label: "Nalanda" },
+  ];
+
+  return (
+    <div className="relative h-[520px] overflow-hidden rounded-lg border border-[var(--accent-500)]/25 bg-[#07100b]/95 shadow-2xl shadow-black/35">
+      <div className="absolute inset-0 opacity-[0.10] [background-image:linear-gradient(to_right,rgba(255,255,255,.24)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,.24)_1px,transparent_1px)] [background-size:42px_42px]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_34%_14%,rgba(34,197,94,.18),transparent_22%),radial-gradient(circle_at_68%_52%,rgba(34,197,94,.14),transparent_28%),linear-gradient(180deg,rgba(34,197,94,.05),transparent_70%)]" />
+      <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/75 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-transparent via-white/[0.055] to-transparent [animation:scanLine_5.2s_linear_infinite]" />
+
+      <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-3 p-4">
+        <div className="rounded-md border border-[var(--accent-500)]/30 bg-[#07130d]/90 px-4 py-3 backdrop-blur">
+          <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.22em] text-[var(--accent-500)]">
+            <span className="h-2 w-2 rounded-full bg-[var(--accent-500)]" />
+            DBSCAN + KDE Layer
+          </div>
+          <p className="mt-2 text-xs font-medium text-zinc-400">Bihar statewide command-center preview</p>
+        </div>
+        <div className="rounded-md border border-white/10 bg-black/40 px-3 py-2 text-right backdrop-blur">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Spatial intelligence</p>
+          <p className="mt-1 text-xs font-semibold text-zinc-200">Real Bihar district map</p>
+        </div>
+      </div>
+
+      <svg className="absolute inset-x-0 top-16 h-[390px] w-full" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} role="img" aria-label="Real Bihar district boundary map preview">
+        <g filter="drop-shadow(0 18px 26px rgba(0,0,0,.45))">
+          {paths.length ? (
+            paths.map((path, index) => (
+              <path
+                key={path.id}
+                d={path.d}
+                fill={index % 4 === 0 ? "rgba(34,197,94,.16)" : index % 3 === 0 ? "rgba(255,255,255,.09)" : "rgba(255,255,255,.05)"}
+                stroke="rgba(34,197,94,.68)"
+                strokeWidth="0.82"
+              />
+            ))
+          ) : (
+            <path
+              d="M130 86 278 46 414 118 372 348 190 360Z"
+              fill="rgba(255,255,255,.07)"
+              stroke="rgba(34,197,94,.58)"
+              strokeWidth="1.4"
+            />
+          )}
+        </g>
+        <path
+          d="M128 252 C190 222 248 232 312 258 C372 284 430 264 492 226"
+          fill="none"
+          stroke="rgba(34,197,94,.56)"
+          strokeDasharray="5 10"
+          strokeWidth="2"
+        />
+      </svg>
+
+      {markers.map((marker, index) => (
+        <div
+          key={marker.label}
+          className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+          style={{ left: marker.x, top: marker.y }}
+          aria-label={`${marker.label} hotspot`}
+        >
+          <span
+            className={`absolute left-1/2 top-1/2 block h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full blur-md ${marker.ring} [animation:hotspotPulse_3.4s_ease-in-out_infinite]`}
+            style={{ animationDelay: `${index * 260}ms` }}
+          />
+          <span className={`relative block h-3.5 w-3.5 rounded-full border border-white/80 ${marker.tone} shadow-[0_0_22px_rgba(34,197,94,.75)]`} />
+        </div>
+      ))}
+
+      <div className="absolute left-1/2 top-[42%] h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--accent-500)]/25 [animation:radarPing_2.9s_ease-out_infinite]" />
+
+      <div className="absolute bottom-24 left-4 z-10 rounded-md border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Risk scale</p>
+        <div className="mt-2 flex items-center gap-1.5">
+          {[
+            "bg-[var(--risk-low)]",
+            "bg-[var(--risk-medium)]",
+            "bg-[var(--risk-high)]",
+          ].map((color) => (
+            <span key={color} className={`h-2.5 w-9 rounded-sm ${color}`} />
+          ))}
+        </div>
+      </div>
+
+      <div className="absolute bottom-24 right-4 z-10 w-44 rounded-md border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Live telemetry</p>
+        <div className="mt-2 space-y-2 text-xs text-zinc-300">
+          <div className="flex justify-between gap-3"><span>Layer</span><strong className="text-[var(--accent-500)]">Both</strong></div>
+          <div className="flex justify-between gap-3"><span>Boundary</span><strong>District</strong></div>
+          <div className="flex justify-between gap-3"><span>Status</span><strong className="text-[var(--risk-low)]">Synced</strong></div>
+        </div>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 z-10 grid grid-cols-3 gap-3 p-4">
+        {[
+          ["Patna", "84", "text-[var(--risk-high)]"],
+          ["Gaya", "71", "text-[var(--risk-medium)]"],
+          ["Muzaffarpur", "68", "text-[var(--risk-low)]"],
+        ].map(([name, value, tone]) => (
+          <div key={name} className="rounded-md border border-white/10 bg-black/45 px-3 py-3 backdrop-blur">
+            <div className="flex items-center justify-between gap-3">
+              <span className="truncate text-sm font-bold text-zinc-100">{name}</span>
+              <span className={`text-sm font-black ${tone}`}>{value}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function LandingPage() {
   return (
-    <div className="relative min-h-screen app-shell-bg text-[var(--fg-primary)]">
-      <div className="pointer-events-none absolute inset-0 hero-grid opacity-30" />
-      <div className="relative z-10 mx-auto max-w-7xl px-5 pb-14 pt-6 md:px-7 md:pt-8">
-        <main className="mt-0 space-y-8 md:mt-0 md:space-y-10">
-          <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-            <article className="surface-card-strong rounded-3xl p-6 md:p-8">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-subtle)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--fg-secondary)]">
-                <Sparkles className="h-3.5 w-3.5 text-[var(--accent-500)]" />
-                Geography-first policing platform
-              </div>
-              <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-[-0.03em] md:text-6xl">
-                Crime control that starts with the map, not the spreadsheet.
-              </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--fg-secondary)] md:text-lg">
-                A decision surface for hotspot detection, FIR intelligence, and patrol planning
-                built for Bihar Police operations across district and station levels.
-              </p>
-              <div className="mt-7 flex flex-wrap gap-3">
-                <Link
-                  href="/signup"
-                  className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--bg-subtle)]"
-                >
-                  Create account
-                </Link>
-                <Link
-                  href="/login"
-                  className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent-500)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--accent-600)]"
-                >
-                  Open command board
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-              <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                {statCards.map((card) => (
-                  <div key={card.label} className="rounded-2xl border bg-[var(--bg-surface)] p-4">
-                    <p className="text-xs uppercase tracking-[0.1em] text-[var(--fg-tertiary)]">
-                      {card.label}
-                    </p>
-                    <p className={`mt-2 text-2xl font-semibold ${card.tone}`}>{card.value}</p>
-                  </div>
-                ))}
-              </div>
-            </article>
+    <main className="dark fixed inset-0 overflow-y-auto overflow-x-hidden bg-[var(--bg-base)] text-[var(--fg-primary)] [scrollbar-width:auto] [&::-webkit-scrollbar]:block">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_72%_10%,rgba(34,197,94,.09),transparent_28%),radial-gradient(circle_at_18%_88%,rgba(245,158,11,.055),transparent_25%),linear-gradient(135deg,#0d0f12_0%,#111417_54%,#0c0f0e_100%)]" />
+      <div className="pointer-events-none fixed inset-0 opacity-[0.055] [background-image:linear-gradient(to_right,rgba(255,255,255,.22)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,.22)_1px,transparent_1px)] [background-size:72px_72px]" />
 
-            <article className="surface-card-strong overflow-hidden rounded-3xl">
-              <div className="border-b px-5 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <MapPinned className="h-4 w-4 text-[var(--accent-500)]" />
-                    Live command preview
-                  </div>
-                  <span className="rounded-full bg-[var(--risk-high-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--risk-high)]">
-                    Spike detected
-                  </span>
-                </div>
-              </div>
-              <div className="relative h-[280px]">
-                <div
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{
-                    backgroundImage:
-                      "url('https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Vidhan-sabha-bihar.jpg/1400px-Vidhan-sabha-bihar.jpg')",
-                  }}
-                />
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,13,16,0.18),rgba(11,13,16,0.75))]" />
-                <div className="absolute left-4 top-4 rounded-xl border border-white/20 bg-black/45 px-3 py-2 text-xs font-medium text-white backdrop-blur">
-                  Patna Central • Last 24h
-                </div>
-                <div className="absolute bottom-4 left-4 right-4 rounded-xl border border-white/15 bg-black/45 p-3 text-white backdrop-blur">
-                  <p className="text-xs uppercase tracking-[0.1em] text-white/75">Priority cluster</p>
-                  <p className="mt-1 text-base font-semibold">Theft-heavy movement corridor</p>
-                  <p className="mt-1 text-xs text-white/80">
-                    127 incidents • +23% WoW • Route dispatch ETA: 12 min
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-2 p-4 text-sm text-[var(--fg-secondary)] sm:grid-cols-2">
-                <div className="rounded-xl border bg-[var(--bg-surface)] p-3">
-                  <p className="font-semibold text-[var(--fg-primary)]">Hindi-ready brief</p>
-                  <p className="mt-1">Risk summary in English and Hindi for station roll-call.</p>
-                </div>
-                <div className="rounded-xl border bg-[var(--bg-surface)] p-3">
-                  <p className="font-semibold text-[var(--fg-primary)]">Explainable ML</p>
-                  <p className="mt-1">Forecast ranges with confidence, not black-box scores.</p>
-                </div>
-              </div>
-            </article>
-          </section>
-
-          <section id="capabilities" className="grid gap-4 md:grid-cols-3">
-            {pillars.map((item) => (
-              <article key={item.title} className="surface-card rounded-2xl p-5">
-                <span className="inline-grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent-50)] text-[var(--accent-600)]">
-                  <item.icon className="h-5 w-5" />
-                </span>
-                <h2 className="mt-4 text-lg font-semibold">{item.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-[var(--fg-secondary)]">{item.copy}</p>
-              </article>
-            ))}
-          </section>
-
-          <section id="workflow" className="surface-card rounded-3xl p-6 md:p-7">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--fg-secondary)]">
-              <Zap className="h-4 w-4 text-[var(--accent-500)]" />
-              Operational loop
+      <section className="relative z-10 px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)]">
+          <div className="text-center lg:text-left">
+            <div className="mb-8 flex justify-center lg:justify-start">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[var(--accent-500)]/25 bg-[var(--accent-50)] px-4 py-2 text-sm font-bold uppercase tracking-wide text-[var(--accent-500)]">
+                <RadioTower className="h-4 w-4" />
+                Bihar Police Intelligence System
+              </span>
             </div>
-            <h3 className="mt-2 text-2xl font-semibold tracking-[-0.02em]">
-              Built for 90-second decision cycles
-            </h3>
-            <div className="mt-5 grid gap-3 md:grid-cols-4">
-              {workflow.map((item) => (
-                <div key={item.step} className="rounded-2xl border bg-[var(--bg-surface)] p-4">
-                  <p className="text-xs font-semibold tracking-[0.12em] text-[var(--fg-tertiary)]">
-                    STEP {item.step}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <item.icon className="h-4 w-4 text-[var(--accent-500)]" />
-                    <p className="text-sm font-semibold text-[var(--fg-primary)]">{item.title}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
 
-          <section id="launch" className="surface-card-strong rounded-3xl p-6 md:p-8">
-            <p className="text-sm font-medium text-[var(--fg-secondary)]">
-              Predictive intelligence for Bihar Police
+            <h1 className="mx-auto max-w-4xl text-4xl font-black leading-tight tracking-tight text-zinc-50 sm:text-5xl lg:mx-0 lg:text-6xl">
+              Transform FIR Data into
+              <span className="block text-[var(--accent-500)]">Actionable Crime Intelligence</span>
+            </h1>
+
+            <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-400 sm:text-xl lg:mx-0">
+              CrimeMap analyzes FIR records to identify hotspots, predict trends, and optimize patrol routes across all 38 districts of Bihar. Empowering police operations with data-driven decisions.
             </p>
-            <h4 className="mt-2 text-2xl font-semibold tracking-[-0.02em] md:text-3xl">
-              Launch the command center and move from reaction to prevention.
-            </h4>
-            <p className="mt-3 text-sm text-[var(--fg-secondary)]">
-              Start with hotspot visibility, then scale to patrol optimization and weekly forecast
-              briefings across districts.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
+
+            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center lg:justify-start">
+              <Link
+                href="/dashboard"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[var(--accent-500)] px-8 text-base font-bold text-white shadow-lg shadow-[var(--accent-500)]/25 transition-colors hover:bg-[var(--accent-600)]"
+              >
+                Access Command Center
+                <ArrowRight className="h-5 w-5" />
+              </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent-500)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--accent-600)]"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-8 text-base font-semibold text-zinc-200 transition-colors hover:border-[var(--accent-500)]/35 hover:bg-[var(--accent-500)]/10"
               >
-                Open command board
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/signup"
-                className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--bg-subtle)]"
-              >
-                Create operator account
+                Officer Sign In
               </Link>
             </div>
-          </section>
-        </main>
+          </div>
 
-        <footer className="mt-10 border-t pt-5 text-xs text-[var(--fg-tertiary)]">
-          Government of Bihar • Crime Predictive Hotspot Mapping System
-        </footer>
+          <BiharMapPreview />
         </div>
-    </div>
+      </section>
+
+      <section className="relative z-10 px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
+            {stats.map((stat) => (
+              <div key={stat.label} className="text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-500)]/10">
+                  <stat.icon className="h-6 w-6 text-[var(--accent-500)]" />
+                </div>
+                <div className="text-3xl font-black text-zinc-100 sm:text-4xl">{stat.value}</div>
+                <div className="mt-2 text-sm font-medium text-zinc-400">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center">
+            <h2 className="text-3xl font-black text-zinc-50 sm:text-4xl">Key Capabilities</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
+              Advanced analytics and visualization tools designed for modern police operations.
+            </p>
+          </div>
+
+          <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map((feature) => (
+              <div key={feature.title} className="rounded-lg border border-white/10 bg-[#14171b]/50 p-6 backdrop-blur-sm">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-500)]/10">
+                  <feature.icon className="h-6 w-6 text-[var(--accent-500)]" />
+                </div>
+                <h3 className="mb-3 text-xl font-bold text-zinc-100">{feature.title}</h3>
+                <p className="text-zinc-400">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="text-3xl font-black text-zinc-50 sm:text-4xl">Ready to Enhance Police Operations?</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
+            Join the Bihar Police in leveraging data-driven insights for safer communities.
+          </p>
+
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
+            <Link
+              href="/dashboard"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[var(--accent-500)] px-8 text-base font-bold text-white shadow-lg shadow-[var(--accent-500)]/25 transition-colors hover:bg-[var(--accent-600)]"
+            >
+              Launch Dashboard
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-8 text-base font-semibold text-zinc-200 transition-colors hover:border-[var(--accent-500)]/35 hover:bg-[var(--accent-500)]/10"
+            >
+              Sign In
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <footer className="relative z-10 border-t border-white/10 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl text-center">
+          <p className="text-sm text-zinc-500">
+            (c) 2026 Bihar Police Crime Intelligence System. Final Year College Project.
+          </p>
+        </div>
+      </footer>
+    </main>
   );
 }

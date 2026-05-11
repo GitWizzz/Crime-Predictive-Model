@@ -6,13 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Eye, EyeOff } from "lucide-react";
 import { SocialAuthButtons } from "./SocialAuthButtons";
 import { Divider } from "./Divider";
@@ -105,25 +98,6 @@ export function LoginForm({ onSwitch }: { onSwitch?: () => void }) {
             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Role*</Label>
-        <Select defaultValue="user">
-          <SelectTrigger className="bg-zinc-900 border-zinc-800">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent
-            position="popper"
-            sideOffset={8}
-            className="z-[9999] bg-zinc-950 border border-zinc-800"
-          >
-            <SelectItem value="user">User</SelectItem>
-            <SelectItem value="officer">Officer</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="analyst">Analyst</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       <div className="flex items-center justify-between text-sm">
