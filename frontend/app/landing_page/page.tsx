@@ -1,372 +1,162 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowRight,
   BarChart3,
-  Bell,
-  Crosshair,
   FileText,
   MapPinned,
-  RadioTower,
   Route,
-  ShieldAlert,
-  TrendingUp,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
-import type { FeatureCollection, Geometry, Position } from "geojson";
 
-const features = [
+const LandingMap = dynamic(() => import("@/components/map/LandingMap"), { ssr: false });
+
+const capabilities = [
   {
     icon: MapPinned,
-    title: "Real-Time Hotspot Mapping",
-    description: "Identify crime-prone areas using advanced clustering algorithms like DBSCAN and KDE, visualized on command dashboards.",
+    title: "Community Hotspot Awareness",
+    description: "Evidence-based spatial analysis helps officers understand where communities need greater support — without profiling individuals.",
   },
   {
     icon: BarChart3,
-    title: "Predictive Analytics",
-    description: "Forecast crime trends with confidence intervals using Prophet and seasonal analysis.",
+    title: "Transparent Forecasting",
+    description: "Open, explainable crime-trend predictions with confidence intervals so decisions are always grounded in accountable data.",
   },
   {
     icon: Route,
-    title: "Optimized Patrol Routes",
-    description: "Generate efficient patrol paths using OR-Tools optimization for maximum coverage of high-risk areas.",
+    title: "Equitable Patrol Coverage",
+    description: "Optimised patrol routes ensure all 38 districts receive responsive, proportionate policing — not just high-visibility areas.",
   },
   {
     icon: FileText,
-    title: "FIR Data Integration",
-    description: "Process and classify FIR records by IPC categories with automated bulk import and validation.",
+    title: "Structured FIR Processing",
+    description: "Structured intake and classification of FIR records improves case continuity, reduces manual error, and supports victim follow-up.",
   },
   {
-    icon: Bell,
-    title: "Alert System",
-    description: "Real-time notifications for emerging hotspots and risk spikes across all 38 districts.",
+    icon: Users,
+    title: "Victim-Centred Reporting",
+    description: "Women safety and vulnerable-group dashboards prioritise the welfare of people affected by crime, not just crime statistics.",
   },
   {
-    icon: ShieldAlert,
-    title: "Risk Assessment",
-    description: "SHAP-based explanations for risk scores, ensuring transparency and trust in predictions.",
+    icon: ShieldCheck,
+    title: "Privacy-Respecting by Design",
+    description: "Role-based access, audit logs, and anonymised aggregation ensure data is used only for legitimate public-safety purposes.",
   },
 ];
 
-const stats = [
-  { value: "38", label: "Districts Covered", icon: MapPinned },
-  { value: "Secure", label: "FIR Data Pipeline", icon: FileText },
-  { value: "Live", label: "Risk Intelligence", icon: Crosshair },
-  { value: "80%", label: "Prediction Accuracy", icon: TrendingUp },
+const pillars = [
+  { value: "38", label: "Districts served" },
+  { value: "SHAP", label: "Explainable AI" },
+  { value: "Audit-logged", label: "Every action" },
+  { value: "Victim-first", label: "Design philosophy" },
 ];
-
-type DistrictCollection = FeatureCollection<Geometry, { name?: string }>;
-
-const MAP_WIDTH = 620;
-const MAP_HEIGHT = 430;
-const MAP_PAD = 34;
-
-const isPosition = (value: unknown): value is Position =>
-  Array.isArray(value) && typeof value[0] === "number" && typeof value[1] === "number";
-
-const collectRings = (geometry: Geometry): Position[][] => {
-  if (geometry.type === "Polygon") return geometry.coordinates as Position[][];
-  if (geometry.type === "MultiPolygon") return geometry.coordinates.flat(1) as Position[][];
-  return [];
-};
-
-const getBounds = (features: DistrictCollection["features"]) => {
-  const bounds = features.reduce(
-    (acc, feature) => {
-      collectRings(feature.geometry).forEach((ring) => {
-        ring.forEach((point) => {
-          if (!isPosition(point)) return;
-          acc.minLon = Math.min(acc.minLon, point[0]);
-          acc.maxLon = Math.max(acc.maxLon, point[0]);
-          acc.minLat = Math.min(acc.minLat, point[1]);
-          acc.maxLat = Math.max(acc.maxLat, point[1]);
-        });
-      });
-      return acc;
-    },
-    { minLon: Infinity, maxLon: -Infinity, minLat: Infinity, maxLat: -Infinity }
-  );
-
-  return Number.isFinite(bounds.minLon) ? bounds : null;
-};
-
-const ringToPath = (
-  ring: Position[],
-  bounds: NonNullable<ReturnType<typeof getBounds>>
-) => {
-  const width = MAP_WIDTH - MAP_PAD * 2;
-  const height = MAP_HEIGHT - MAP_PAD * 2;
-  const lonSpan = bounds.maxLon - bounds.minLon || 1;
-  const latSpan = bounds.maxLat - bounds.minLat || 1;
-  const scale = Math.min(width / lonSpan, height / latSpan);
-  const offsetX = (MAP_WIDTH - lonSpan * scale) / 2;
-  const offsetY = (MAP_HEIGHT - latSpan * scale) / 2;
-
-  return ring
-    .filter(isPosition)
-    .map(([lon, lat], index) => {
-      const x = offsetX + (lon - bounds.minLon) * scale;
-      const y = offsetY + (bounds.maxLat - lat) * scale;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
-};
-
-function BiharMapPreview() {
-  const [districts, setDistricts] = useState<DistrictCollection | null>(null);
-
-  useEffect(() => {
-    fetch("/bihar_districts.geojson")
-      .then((response) => response.json())
-      .then((data: DistrictCollection) => setDistricts(data))
-      .catch(() => setDistricts(null));
-  }, []);
-
-  const paths = useMemo(() => {
-    if (!districts) return [];
-    const bounds = getBounds(districts.features);
-    if (!bounds) return [];
-
-    return districts.features.flatMap((feature, featureIndex) =>
-      collectRings(feature.geometry).map((ring, ringIndex) => ({
-        id: `${feature.properties?.name || "district"}-${featureIndex}-${ringIndex}`,
-        d: `${ringToPath(ring, bounds)} Z`,
-      }))
-    );
-  }, [districts]);
-
-  const markers = [
-    { x: "48%", y: "34%", tone: "bg-[var(--risk-medium)]", ring: "bg-[var(--risk-medium)]/20", label: "Patna" },
-    { x: "59%", y: "23%", tone: "bg-[var(--risk-low)]", ring: "bg-[var(--risk-low)]/20", label: "Muzaffarpur" },
-    { x: "67%", y: "55%", tone: "bg-[var(--risk-low)]", ring: "bg-[var(--risk-low)]/20", label: "Bhagalpur" },
-    { x: "35%", y: "64%", tone: "bg-[var(--risk-high)]", ring: "bg-[var(--risk-high)]/20", label: "Gaya" },
-    { x: "43%", y: "51%", tone: "bg-[var(--risk-medium)]", ring: "bg-[var(--risk-medium)]/20", label: "Nalanda" },
-  ];
-
-  return (
-    <div className="relative h-[520px] overflow-hidden rounded-lg border border-[var(--accent-500)]/25 bg-[#07100b]/95 shadow-2xl shadow-black/35">
-      <div className="absolute inset-0 opacity-[0.10] [background-image:linear-gradient(to_right,rgba(255,255,255,.24)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,.24)_1px,transparent_1px)] [background-size:42px_42px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_34%_14%,rgba(34,197,94,.18),transparent_22%),radial-gradient(circle_at_68%_52%,rgba(34,197,94,.14),transparent_28%),linear-gradient(180deg,rgba(34,197,94,.05),transparent_70%)]" />
-      <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/75 to-transparent" />
-      <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-transparent via-white/[0.055] to-transparent [animation:scanLine_5.2s_linear_infinite]" />
-
-      <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-3 p-4">
-        <div className="rounded-md border border-[var(--accent-500)]/30 bg-[#07130d]/90 px-4 py-3 backdrop-blur">
-          <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.22em] text-[var(--accent-500)]">
-            <span className="h-2 w-2 rounded-full bg-[var(--accent-500)]" />
-            DBSCAN + KDE Layer
-          </div>
-          <p className="mt-2 text-xs font-medium text-zinc-400">Bihar statewide command-center preview</p>
-        </div>
-        <div className="rounded-md border border-white/10 bg-black/40 px-3 py-2 text-right backdrop-blur">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Spatial intelligence</p>
-          <p className="mt-1 text-xs font-semibold text-zinc-200">Real Bihar district map</p>
-        </div>
-      </div>
-
-      <svg className="absolute inset-x-0 top-16 h-[390px] w-full" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} role="img" aria-label="Real Bihar district boundary map preview">
-        <g filter="drop-shadow(0 18px 26px rgba(0,0,0,.45))">
-          {paths.length ? (
-            paths.map((path, index) => (
-              <path
-                key={path.id}
-                d={path.d}
-                fill={index % 4 === 0 ? "rgba(34,197,94,.16)" : index % 3 === 0 ? "rgba(255,255,255,.09)" : "rgba(255,255,255,.05)"}
-                stroke="rgba(34,197,94,.68)"
-                strokeWidth="0.82"
-              />
-            ))
-          ) : (
-            <path
-              d="M130 86 278 46 414 118 372 348 190 360Z"
-              fill="rgba(255,255,255,.07)"
-              stroke="rgba(34,197,94,.58)"
-              strokeWidth="1.4"
-            />
-          )}
-        </g>
-        <path
-          d="M128 252 C190 222 248 232 312 258 C372 284 430 264 492 226"
-          fill="none"
-          stroke="rgba(34,197,94,.56)"
-          strokeDasharray="5 10"
-          strokeWidth="2"
-        />
-      </svg>
-
-      {markers.map((marker, index) => (
-        <div
-          key={marker.label}
-          className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
-          style={{ left: marker.x, top: marker.y }}
-          aria-label={`${marker.label} hotspot`}
-        >
-          <span
-            className={`absolute left-1/2 top-1/2 block h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full blur-md ${marker.ring} [animation:hotspotPulse_3.4s_ease-in-out_infinite]`}
-            style={{ animationDelay: `${index * 260}ms` }}
-          />
-          <span className={`relative block h-3.5 w-3.5 rounded-full border border-white/80 ${marker.tone} shadow-[0_0_22px_rgba(34,197,94,.75)]`} />
-        </div>
-      ))}
-
-      <div className="absolute left-1/2 top-[42%] h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--accent-500)]/25 [animation:radarPing_2.9s_ease-out_infinite]" />
-
-      <div className="absolute bottom-24 left-4 z-10 rounded-md border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Risk scale</p>
-        <div className="mt-2 flex items-center gap-1.5">
-          {[
-            "bg-[var(--risk-low)]",
-            "bg-[var(--risk-medium)]",
-            "bg-[var(--risk-high)]",
-          ].map((color) => (
-            <span key={color} className={`h-2.5 w-9 rounded-sm ${color}`} />
-          ))}
-        </div>
-      </div>
-
-      <div className="absolute bottom-24 right-4 z-10 w-44 rounded-md border border-white/10 bg-black/40 px-3 py-3 backdrop-blur">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Live telemetry</p>
-        <div className="mt-2 space-y-2 text-xs text-zinc-300">
-          <div className="flex justify-between gap-3"><span>Layer</span><strong className="text-[var(--accent-500)]">Both</strong></div>
-          <div className="flex justify-between gap-3"><span>Boundary</span><strong>District</strong></div>
-          <div className="flex justify-between gap-3"><span>Status</span><strong className="text-[var(--risk-low)]">Synced</strong></div>
-        </div>
-      </div>
-
-      <div className="absolute inset-x-0 bottom-0 z-10 grid grid-cols-3 gap-3 p-4">
-        {[
-          ["Patna", "84", "text-[var(--risk-high)]"],
-          ["Gaya", "71", "text-[var(--risk-medium)]"],
-          ["Muzaffarpur", "68", "text-[var(--risk-low)]"],
-        ].map(([name, value, tone]) => (
-          <div key={name} className="rounded-md border border-white/10 bg-black/45 px-3 py-3 backdrop-blur">
-            <div className="flex items-center justify-between gap-3">
-              <span className="truncate text-sm font-bold text-zinc-100">{name}</span>
-              <span className={`text-sm font-black ${tone}`}>{value}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function LandingPage() {
   return (
-    <main className="dark fixed inset-0 overflow-y-auto overflow-x-hidden bg-[var(--bg-base)] text-[var(--fg-primary)] [scrollbar-width:auto] [&::-webkit-scrollbar]:block">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_72%_10%,rgba(34,197,94,.09),transparent_28%),radial-gradient(circle_at_18%_88%,rgba(245,158,11,.055),transparent_25%),linear-gradient(135deg,#0d0f12_0%,#111417_54%,#0c0f0e_100%)]" />
-      <div className="pointer-events-none fixed inset-0 opacity-[0.055] [background-image:linear-gradient(to_right,rgba(255,255,255,.22)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,.22)_1px,transparent_1px)] [background-size:72px_72px]" />
+    <main className="flex h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] flex-col overflow-hidden bg-[#0d0f12] text-zinc-100">
 
-      <section className="relative z-10 px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)]">
-          <div className="text-center lg:text-left">
-            <div className="mb-8 flex justify-center lg:justify-start">
-              <span className="inline-flex items-center gap-2 rounded-full border border-[var(--accent-500)]/25 bg-[var(--accent-50)] px-4 py-2 text-sm font-bold uppercase tracking-wide text-[var(--accent-500)]">
-                <RadioTower className="h-4 w-4" />
-                Bihar Police Intelligence System
-              </span>
-            </div>
+      {/* ── Hero split ──────────────────────────────────────────────────── */}
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[1fr_1.15fr]">
 
-            <h1 className="mx-auto max-w-4xl text-4xl font-black leading-tight tracking-tight text-zinc-50 sm:text-5xl lg:mx-0 lg:text-6xl">
-              Transform FIR Data into
-              <span className="block text-[var(--accent-500)]">Actionable Crime Intelligence</span>
-            </h1>
+        {/* Left — copy */}
+        <div className="flex flex-col justify-center overflow-hidden px-8 py-4 lg:px-12">
 
-            <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-400 sm:text-xl lg:mx-0">
-              CrimeMap analyzes FIR records to identify hotspots, predict trends, and optimize patrol routes across all 38 districts of Bihar. Empowering police operations with data-driven decisions.
-            </p>
-
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center lg:justify-start">
-              <Link
-                href="/dashboard"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[var(--accent-500)] px-8 text-base font-bold text-white shadow-lg shadow-[var(--accent-500)]/25 transition-colors hover:bg-[var(--accent-600)]"
-              >
-                Access Command Center
-                <ArrowRight className="h-5 w-5" />
-              </Link>
-              <Link
-                href="/login"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-8 text-base font-semibold text-zinc-200 transition-colors hover:border-[var(--accent-500)]/35 hover:bg-[var(--accent-500)]/10"
-              >
-                Officer Sign In
-              </Link>
-            </div>
+          <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#22c55e]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+            Evidence-based policing · Bihar
           </div>
 
-          <BiharMapPreview />
-        </div>
-      </section>
+          <h1 className="text-[2rem] font-black leading-[1.1] tracking-[-0.03em] text-zinc-50 lg:text-[2.4rem]">
+            Safer Communities
+            <span className="block text-[#22c55e]">Through Transparent Data</span>
+          </h1>
 
-      <section className="relative z-10 px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-500)]/10">
-                  <stat.icon className="h-6 w-6 text-[var(--accent-500)]" />
+          <p className="mt-3 max-w-lg text-[13px] leading-relaxed text-zinc-400">
+            CrimeIntel helps Bihar Police allocate resources fairly, respond faster,
+            and report transparently — giving officers the context they need to serve
+            all communities with equity and accountability.
+          </p>
+
+          {/* Pillars */}
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {pillars.map((p) => (
+              <div key={p.label} className="rounded-[12px] border border-white/10 bg-white/[0.04] px-3 py-2">
+                <p className="text-[15px] font-black text-[#22c55e]">{p.value}</p>
+                <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">{p.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* CTAs */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/dashboard" className="inline-flex h-9 items-center gap-2 rounded-[12px] bg-[#22c55e] px-5 text-[13px] font-bold text-white shadow-lg shadow-[#22c55e]/20 hover:bg-[#16a34a] transition-colors">
+              Open Command Centre
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+            <Link href="/login" className="inline-flex h-9 items-center gap-2 rounded-[12px] border border-white/12 bg-white/[0.04] px-5 text-[13px] font-semibold text-zinc-300 hover:border-[#22c55e]/40 hover:text-white transition-colors">
+              Officer Sign In
+            </Link>
+          </div>
+
+          {/* Capability mini-grid */}
+          <div id="capabilities" className="mt-4 grid grid-cols-2 gap-2.5 border-t border-white/10 pt-4">
+            {capabilities.slice(0, 4).map((cap) => (
+              <div key={cap.title} className="flex items-start gap-2">
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[#22c55e]/10">
+                  <cap.icon className="h-3 w-3 text-[#22c55e]" />
                 </div>
-                <div className="text-3xl font-black text-zinc-100 sm:text-4xl">{stat.value}</div>
-                <div className="mt-2 text-sm font-medium text-zinc-400">{stat.label}</div>
+                <div>
+                  <p className="text-[11px] font-bold text-zinc-100">{cap.title}</p>
+                  <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-500">{cap.description}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
-      </section>
 
-      <section className="relative z-10 px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="text-center">
-            <h2 className="text-3xl font-black text-zinc-50 sm:text-4xl">Key Capabilities</h2>
-            <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
-              Advanced analytics and visualization tools designed for modern police operations.
-            </p>
+        {/* Right — live map (isolated stacking context so leaflet z-indices stay inside) */}
+        <div className="relative hidden lg:block" style={{ isolation: "isolate" }}>
+          <LandingMap />
+
+          {/* Overlay cards */}
+          <div className="pointer-events-none absolute left-4 top-4 z-[1000] space-y-2">
+            <div className="rounded-[14px] border border-white/10 bg-[#0d0f12]/80 px-3.5 py-2.5 shadow-sm backdrop-blur-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">Live layer</p>
+              <p className="mt-0.5 text-[13px] font-bold text-zinc-100">DBSCAN + KDE · Bihar</p>
+            </div>
           </div>
 
-          <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
-              <div key={feature.title} className="rounded-lg border border-white/10 bg-[#14171b]/50 p-6 backdrop-blur-sm">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-500)]/10">
-                  <feature.icon className="h-6 w-6 text-[var(--accent-500)]" />
-                </div>
-                <h3 className="mb-3 text-xl font-bold text-zinc-100">{feature.title}</h3>
-                <p className="text-zinc-400">{feature.description}</p>
+          <div className="pointer-events-none absolute bottom-6 left-4 right-4 z-[1000] flex gap-3">
+            {[
+              { name: "Patna", score: 84, tone: "text-red-400 bg-red-950/60 border-red-900/40" },
+              { name: "Gaya", score: 71, tone: "text-amber-400 bg-amber-950/60 border-amber-900/40" },
+              { name: "Muzaffarpur", score: 63, tone: "text-green-400 bg-green-950/60 border-green-900/40" },
+            ].map((zone) => (
+              <div key={zone.name} className={`flex flex-1 items-center justify-between rounded-[14px] border px-3.5 py-2.5 backdrop-blur-sm ${zone.tone}`}>
+                <span className="text-[13px] font-semibold text-zinc-200">{zone.name}</span>
+                <span className={`text-[13px] font-black ${zone.tone.split(" ")[0]}`}>{zone.score}</span>
               </div>
             ))}
           </div>
-        </div>
-      </section>
 
-      <section className="relative z-10 px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl font-black text-zinc-50 sm:text-4xl">Ready to Enhance Police Operations?</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
-            Join the Bihar Police in leveraging data-driven insights for safer communities.
-          </p>
-
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
-            <Link
-              href="/dashboard"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[var(--accent-500)] px-8 text-base font-bold text-white shadow-lg shadow-[var(--accent-500)]/25 transition-colors hover:bg-[var(--accent-600)]"
-            >
-              Launch Dashboard
-              <ArrowRight className="h-5 w-5" />
-            </Link>
-            <Link
-              href="/login"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-8 text-base font-semibold text-zinc-200 transition-colors hover:border-[var(--accent-500)]/35 hover:bg-[var(--accent-500)]/10"
-            >
-              Sign In
-            </Link>
+          {/* Ethics badge */}
+          <div id="ethics" className="pointer-events-none absolute right-4 top-4 z-[1000]">
+            <div className="rounded-[14px] border border-[#22c55e]/30 bg-[#22c55e]/10 px-3.5 py-2.5 backdrop-blur-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#22c55e]">Privacy-respecting</p>
+              <p className="mt-0.5 text-[12px] font-bold text-[#4ade80]">No individual profiling</p>
+            </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      <footer className="relative z-10 border-t border-white/10 px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl text-center">
-          <p className="text-sm text-zinc-500">
-            (c) 2026 Bihar Police Crime Intelligence System. Final Year College Project.
-          </p>
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <footer className="shrink-0 border-t border-white/10 bg-[#0d0f12]/80 px-6 py-3 backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500">
+          <span>© 2026 Bihar Police Crime Intelligence System · Final Year Project</span>
+          <span>Data used solely for lawful public-safety purposes · Audit-logged · Role-gated access</span>
         </div>
       </footer>
     </main>

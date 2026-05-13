@@ -33,7 +33,7 @@ export default function TopNav() {
 
   return (
     <nav
-      className={`sticky top-0 z-40 w-full border-b backdrop-blur-xl ${
+      className={`sticky top-0 z-1000 w-full border-b backdrop-blur-xl ${
         isDarkChrome
           ? "border-white/10 bg-[#0d0f12]/95 text-zinc-100"
           : "border-[var(--border-default)] bg-[var(--bg-surface)]/90"

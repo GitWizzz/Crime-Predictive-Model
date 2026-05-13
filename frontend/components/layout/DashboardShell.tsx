@@ -1,9 +1,7 @@
-
 "use client";
 
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
-=======
 import { Suspense } from "react";
 
 import Sidebar from "./Sidebar";
