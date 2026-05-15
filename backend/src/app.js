@@ -38,6 +38,9 @@ app.use(
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
       ];
+      if (env.corsOrigin && !allowedOrigins.includes(env.corsOrigin)) {
+        allowedOrigins.push(env.corsOrigin);
+      }
       
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
@@ -71,7 +74,6 @@ const mountApiRoutes = (prefix) => {
 };
 
 mountApiRoutes("/api/v1");
-mountApiRoutes("/api");
 
 app.use(errorHandler);
 

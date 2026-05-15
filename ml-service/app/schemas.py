@@ -44,6 +44,7 @@ class KDERequest(BaseModel):
     grid_size: int = Field(default=30, ge=5, le=200)
     boundary_geojson: Optional[Dict[str, Any]] = None
     weights: Optional[List[float]] = None
+    min_intensity: float = Field(default=0.01, ge=0, le=1)
 
 
 class HeatPoint(BaseModel):
@@ -76,6 +77,7 @@ class ForecastPoint(BaseModel):
 
 class ForecastResponse(BaseModel):
     points: List[ForecastPoint]
+    fallback_used: bool = False
 
 
 class RouteRequest(BaseModel):

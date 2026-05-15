@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import pandas as pd
 
 from ..schemas import ForecastPoint, ForecastRequest, ForecastResponse
+
+logger = logging.getLogger(__name__)
 
 try:
     from prophet import Prophet
@@ -10,7 +13,7 @@ except Exception:  # pragma: no cover
     Prophet = None
 
 
-def _build_baseline_forecast(df: pd.DataFrame, periods: int, freq: str) -> ForecastResponse:
+def _build_baseline_forecast(df: pd.DataFrame, periods: int, freq: str, fallback: bool = False) -> ForecastResponse:
     values = df["y"].astype(float).tolist()
     window = values[-7:] if len(values) >= 7 else values
     avg = float(sum(window) / max(1, len(window)))
@@ -31,13 +34,13 @@ def _build_baseline_forecast(df: pd.DataFrame, periods: int, freq: str) -> Forec
                 yhat_upper=yhat * 1.15,
             )
         )
-    return ForecastResponse(points=points)
+    return ForecastResponse(points=points, fallback_used=fallback)
 
 
 def run_forecast(req: ForecastRequest) -> ForecastResponse:
     df = pd.DataFrame([{"ds": p.ds, "y": p.y} for p in req.series])
     if df.empty:
-        return ForecastResponse(points=[])
+        return ForecastResponse(points=[], fallback_used=True)
 
     df["ds"] = pd.to_datetime(df["ds"], errors="coerce")
     df["y"] = pd.to_numeric(df["y"], errors="coerce")
@@ -49,7 +52,8 @@ def run_forecast(req: ForecastRequest) -> ForecastResponse:
     df = df.groupby("ds", as_index=False)["y"].sum()
 
     if Prophet is None:
-        return _build_baseline_forecast(df, req.periods, req.freq)
+        logger.warning("Prophet not installed — using baseline forecast")
+        return _build_baseline_forecast(df, req.periods, req.freq, fallback=True)
 
     try:
         model = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=True)
@@ -65,8 +69,7 @@ def run_forecast(req: ForecastRequest) -> ForecastResponse:
             )
             for _, row in forecast.iterrows()
         ]
-        return ForecastResponse(points=points)
+        return ForecastResponse(points=points, fallback_used=False)
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("Prophet forecast failed, using baseline: %s", exc)
-        return _build_baseline_forecast(df, req.periods, req.freq)
+        logger.warning("Prophet forecast failed, using baseline: %s", exc)
+        return _build_baseline_forecast(df, req.periods, req.freq, fallback=True)

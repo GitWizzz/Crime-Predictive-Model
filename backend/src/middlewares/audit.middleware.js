@@ -26,8 +26,8 @@ export const auditMiddleware = (req, res, next) => {
         metadata,
         ip_address: req.ip,
       });
-    } catch {
-      
+    } catch (err) {
+      console.error("[AuditMiddleware] Failed to write audit log:", err.message);
     }
   });
 

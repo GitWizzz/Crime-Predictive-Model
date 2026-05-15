@@ -75,5 +75,6 @@ def run_kde(req: KDERequest) -> KDEResponse:
     heat_points = [
         HeatPoint(lat=float(grid_deg[i][0]), lon=float(grid_deg[i][1]), intensity=float(intensities[i]))
         for i in range(len(grid_deg))
+        if intensities[i] >= req.min_intensity
     ]
     return KDEResponse(heat_points=heat_points)
