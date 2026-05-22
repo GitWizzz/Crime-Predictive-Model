@@ -2,6 +2,17 @@
 **Crime Predictive Hotspot Mapping System**  
 Last updated: 2026-04-20
 
+## Quick start
+
+To get everything running quickly with Docker Compose:
+
+```bash
+docker compose up -d --build
+```
+
+Then run migrations and seeds (see sections below).
+
+
 ---
 
 ## Prerequisites

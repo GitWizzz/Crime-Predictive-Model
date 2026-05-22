@@ -1,5 +1,16 @@
 # Crime Predictive Model / Tool for Hotspot Mapping
 
+## Quick Start (one command)
+
+Run the full stack locally with Docker Compose (recommended):
+
+```bash
+docker compose up -d --build
+```
+
+Backend health: `GET /api/v1/health` — meta info: `GET /api/v1/meta`
+
+
 ## 📌 Project Overview
 
 This project is a **Final Year College Project** developed by a **team of 3 members**. The goal is to build a **web-based crime analysis and hotspot mapping system** that helps visualize, analyze, and predict crime-prone areas using FIR (First Information Report) data.

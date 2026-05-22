@@ -20,6 +20,7 @@ import dashboardRoutes from "./routes/dashboard.routes.js";
 import alertRoutes from "./routes/alert.routes.js";
 import auditRoutes from "./routes/audit.routes.js";
 import geoFenceRoutes from "./routes/geoFence.routes.js";
+import metaRoutes from "./routes/meta.routes.js";
 
 
 const app = express();
@@ -71,6 +72,7 @@ const mountApiRoutes = (prefix) => {
   app.use(`${prefix}/alerts`, alertRoutes);
   app.use(`${prefix}/audit`, auditRoutes);
   app.use(`${prefix}/geo-fences`, geoFenceRoutes);
+  app.use(`${prefix}/meta`, metaRoutes);
 };
 
 mountApiRoutes("/api/v1");
