@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BarChart3, Car, ClipboardList, Download, FileText, Sparkles } from "lucide-react";
+import { apiUrl } from "@/services/api";
 
 type Tab = "quick" | "sched" | "arch";
 
@@ -60,7 +61,7 @@ export default function ReportsPage() {
       if (report.zone) params.set("zone", report.zone);
       if (report.crimeType) params.set("crimeType", report.crimeType);
 
-      const res = await fetch(`/api/analytics/export/csv?${params}`, {
+      const res = await fetch(apiUrl(`/api/analytics/export/csv?${params}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
 

@@ -1,0 +1,11 @@
+cd backend
+npm run dev
+
+cd frontend
+npm run dev
+
+cd ml-service
+py -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+
+Email: admin@crime.local
+Password: admin123

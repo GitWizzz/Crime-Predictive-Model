@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000").replace(/\/$/, "");
 
 type ApiToken = string | null | undefined;
 
@@ -26,6 +26,15 @@ const buildHeaders = (token?: ApiToken) => {
   return headers;
 };
 
+export const apiPath = (path: string) => {
+  if (path.startsWith("/api/v1/")) return path;
+  if (path === "/api/v1") return path;
+  if (path.startsWith("/api/")) return `/api/v1${path.slice(4)}`;
+  return path;
+};
+
+export const apiUrl = (path: string) => `${API_BASE}${apiPath(path)}`;
+
 const parseResponse = async (res: Response) => {
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
@@ -40,7 +49,7 @@ export const apiGet = async (path: string, token?: ApiToken) => {
   const cached = cache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(apiUrl(path), {
     headers: buildHeaders(token),
   });
 
@@ -54,7 +63,7 @@ export const apiGet = async (path: string, token?: ApiToken) => {
 };
 
 export const apiPost = async (path: string, body: unknown, token?: ApiToken) => {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method: "POST",
     headers: buildHeaders(token),
     body: JSON.stringify(body),

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { GeoJsonObject } from "geojson";
 import { Plus, Trash2, ToggleLeft, ToggleRight, AlertCircle } from "lucide-react";
 import { fetchZones } from "@/services/zones";
-import { apiGet, apiPost } from "@/services/api";
+import { apiGet, apiPost, apiUrl } from "@/services/api";
 
 const GeoFenceMap = dynamic(() => import("@/components/map/GeoFenceMap"), { ssr: false });
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
@@ -104,7 +104,7 @@ export default function GeoFencesPage() {
   const toggleFence = async (fence: GeoFence) => {
     if (!token || !isAdmin) return;
     try {
-      const res = await fetch(`/api/geo-fences/${fence.id}`, {
+      const res = await fetch(apiUrl(`/api/geo-fences/${fence.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ active: !fence.active }),
@@ -122,7 +122,7 @@ export default function GeoFencesPage() {
     if (!token || !isAdmin) return;
     if (!confirm(`Deactivate "${fence.name}"?`)) return;
     try {
-      const res = await fetch(`/api/geo-fences/${fence.id}`, {
+      const res = await fetch(apiUrl(`/api/geo-fences/${fence.id}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

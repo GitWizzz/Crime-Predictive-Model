@@ -20,6 +20,7 @@ import { fetchFIRs, fetchHotspots, fetchKDEHotspots } from "@/services/hotspots"
 import { fetchZones } from "@/services/zones";
 import { fetchZoneAnalytics, fetchWomenSafety } from "@/services/analytics";
 import { fetchIradHotspots } from "@/services/irad";
+import { apiUrl } from "@/services/api";
 import Drawer from "@/components/ui/Drawer";
 import HotspotDetail from "@/components/dashboard/HotspotDetail";
 
@@ -27,7 +28,6 @@ const HotspotsMap = dynamic(() => import("@/components/map/HotspotsMap"), { ssr:
 
 const MODE_DBSCAN = "dbscan" as const;
 const MODE_KDE = "kde" as const;
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
 type Hotspot = {
   clusterId: string;
@@ -424,7 +424,7 @@ export default function HotspotsPage() {
       eventSourceRef.current.close();
     }
 
-    const source = new EventSource(`${API_BASE}/api/events/stream?token=${token}`);
+    const source = new EventSource(apiUrl(`/api/events/stream?token=${token}`));
     eventSourceRef.current = source;
 
     source.addEventListener("fir_created", () => {
